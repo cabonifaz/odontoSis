@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+/* =====================================================================
+   OdontoSis Design System — tokens
+   Ver docs/design-system.md. Los colores de marca (--brand, --accent) se
+   sobrescriben en tiempo de ejecución con los colores de cada clínica.
+   ===================================================================== */
+:root {
+  /* Marca (por tenant) */
+  --brand: #0e7490;
+  --accent: #f59e0b;
+  --brand-contrast: #ffffff;
+
+  /* Neutros */
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --text-subtle: #94a3b8;
+
+  /* Semánticos */
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --info: #0284c7;
+
+  /* Derivados de marca */
+  --brand-soft: color-mix(in srgb, var(--brand) 10%, var(--surface));
+  --brand-hover: color-mix(in srgb, var(--brand) 85%, black);
+  --ring: color-mix(in srgb, var(--brand) 45%, transparent);
+
+  /* Elevación / radios / motion */
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.06);
+  --shadow-md: 0 4px 12px rgb(15 23 42 / 0.08);
+  --shadow-lg: 0 16px 40px rgb(15 23 42 / 0.16);
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1220;
+    --surface: #111a2c;
+    --surface-2: #17223a;
+    --border: #23304a;
+    --border-strong: #334563;
+    --text: #e6ebf3;
+    --text-muted: #9aa8bf;
+    --text-subtle: #6b7a94;
+    --brand-soft: color-mix(in srgb, var(--brand) 22%, var(--surface));
+    --brand-hover: color-mix(in srgb, var(--brand) 80%, white);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b1220;
+  --surface: #111a2c;
+  --surface-2: #17223a;
+  --border: #23304a;
+  --border-strong: #334563;
+  --text: #e6ebf3;
+  --text-muted: #9aa8bf;
+  --text-subtle: #6b7a94;
+  --brand-soft: color-mix(in srgb, var(--brand) 22%, var(--surface));
+  --brand-hover: color-mix(in srgb, var(--brand) 80%, white);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-contrast: var(--brand-contrast);
+  --color-accent: var(--accent);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-fg: var(--text);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --color-ring: var(--ring);
+  --shadow-card: var(--shadow-sm);
+  --shadow-pop: var(--shadow-md);
+  --shadow-modal: var(--shadow-lg);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --radius-control: 0.5rem;
+  --radius-card: 0.875rem;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* Tablas responsivas: en móvil cada fila se muestra como tarjeta */
+@media (max-width: 767px) {
+  .table-cards thead { display: none; }
+  .table-cards tr { display: block; border-bottom: 1px solid var(--border); padding: 0.75rem 1rem; }
+  .table-cards td { display: flex; justify-content: space-between; gap: 1rem; padding: 0.2rem 0 !important; border: 0 !important; }
+  .table-cards td[data-label]::before { content: attr(data-label); color: var(--text-muted); font-size: 0.75rem; }
+}
+
+/* Impresión (presupuesto) */
+@media print {
+  /* margin 0 elimina el encabezado/pie que agrega el navegador (URL, título, fecha); el margen lo da .print-area */
+  @page { size: A4; margin: 0; }
+  .print-area { padding: 12mm 14mm !important; max-width: none !important; border-radius: 0 !important; }
+  main { padding: 0 !important; max-width: none !important; }
+  .min-h-dvh { padding-left: 0 !important; }
+  body { background: white !important; color: black !important; }
+  .no-print { display: none !important; }
+  .print-area { box-shadow: none !important; border: 0 !important; }
+}
