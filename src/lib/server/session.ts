@@ -27,19 +27,21 @@ const ttlDate = () => new Date(Date.now() + env().SESSION_TTL_HOURS * 3600_000);
 const toDb = toDbDateTime;
 
 /**
- * IP del cliente. Detrás del proxy de Railway, X-Forwarded-For llega como "<lo que mandó el cliente>, <IP real>":
- * las entradas de la izquierda las controla el atacante, así que se toma la que agregó el proxy de confianza
- * (contando TRUSTED_PROXY_HOPS desde la derecha, por defecto 1). Nunca la primera.
+ * IP del cliente. El borde de Railway fija `X-Real-IP` con la IP remota real (documentado), así que en Railway
+ * se confía en esa cabecera (TRUSTED_IP_HEADER, por defecto x-real-ip). Sin ella, de X-Forwarded-For se toma la
+ * entrada que agregó el proxy de confianza (TRUSTED_PROXY_HOPS desde la derecha, por defecto 1). Nunca la primera:
+ * las entradas de la izquierda las controla el atacante.
  */
-export function clientIpFrom(xff: string | null, realIp: string | null, hops = Number(process.env.TRUSTED_PROXY_HOPS ?? 1)) {
+export function clientIpFrom(xff: string | null, trusted: string | null, hops = Number(process.env.TRUSTED_PROXY_HOPS ?? 1)) {
   const parts = (xff ?? '').split(',').map((p) => p.trim()).filter(Boolean);
-  const ip = parts.length ? parts[Math.max(0, parts.length - Math.max(1, hops))] : realIp?.trim();
+  const ip = trusted?.trim() || (parts.length ? parts[Math.max(0, parts.length - Math.max(1, hops))] : null);
   return ip && /^[0-9a-fA-F:.]{2,45}$/.test(ip) ? ip : null;
 }
 
 export async function clientInfo() {
   const h = await headers();
-  const ip = clientIpFrom(h.get('x-forwarded-for'), h.get('x-real-ip'));
+  const header = process.env.TRUSTED_IP_HEADER ?? (process.env.RAILWAY_ENVIRONMENT_ID ? 'x-real-ip' : '');
+  const ip = clientIpFrom(h.get('x-forwarded-for'), header ? h.get(header) : null);
   return { ip, userAgent: h.get('user-agent')?.slice(0, 300) ?? null };
 }
 
