@@ -28,3 +28,15 @@
 2. `npm run db:migrate` contra producción.
 3. `npm run db:superadmin` contra producción y activar el 2FA del super admin en el primer ingreso.
 4. **No** ejecutar `db:seed-demo` en producción (el script lo impide).
+
+## Consulta de DNI (Decolecta)
+
+- `DNI_API_TOKEN` se configura **sólo en producción**: el plan del proveedor tiene un cupo mensual
+  compartido y el consumo se registra en la base de cada ambiente (`dni_lookup`).
+- El super admin ve el consumo en **Consultas DNI** (`/admin/dni`): barra de uso, proyección al cierre del
+  ciclo, consumo por clínica y por día, e histórico de 6 ciclos. Allí se ajusta el plan contratado
+  (consultas por mes, % de alerta y día de renovación) al ampliarlo en Decolecta.
+- Se alerta en el resumen de plataforma al pasar el % configurado o cuando la proyección supera el cupo.
+  Al agotarse, la app deja de llamar al proveedor (`DNI_QUOTA_EXCEEDED`) y se ingresan los datos a mano.
+- Cuentan las respuestas con datos y las "sin datos"; no cuentan errores de red/proveedor ni repeticiones
+  del mismo DNI en 24 h (caché en memoria del servidor; se pierde al redesplegar).

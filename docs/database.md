@@ -60,5 +60,7 @@ database/procedures/0x0_*.sql                stored procedures (repetibles)
 | `odontogram`, `odontogram_mark` | Odontograma del paciente o del presupuesto |
 | `appointment` | Citas (control de choques en el SP) |
 | `file_asset` | Metadatos de archivos (el binario vive en el volumen `UPLOAD_DIR`) |
+| `platform_setting` | Parámetros globales del super admin (cupo de DNI, % de alerta, día de renovación) |
+| `dni_lookup` | Consumo de la consulta de DNI (sólo blind index del DNI, resultado y si consumió cupo) |
 | `audit_log` | Bitácora |
 | `schema_migration` | Control de migraciones |

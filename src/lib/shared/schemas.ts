@@ -402,3 +402,10 @@ export type PatientInput = z.infer<typeof patientSchema>;
 export type BudgetInput = z.infer<typeof budgetSchema>;
 export type AppointmentInput = z.infer<typeof appointmentSchema>;
 export type SyncOp = z.infer<typeof syncOpSchema>;
+
+/** Plan contratado con el proveedor de DNI: cupo mensual, % de alerta y día de renovación */
+export const dniSettingsSchema = z.object({
+  quota: z.coerce.number().int().min(0).max(1_000_000),
+  alertPct: z.coerce.number().int().min(1).max(100),
+  cycleDay: z.coerce.number().int().min(1).max(28),
+});

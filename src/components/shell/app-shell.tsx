@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import {
   CalendarDays, ClipboardList, Cloud, CloudOff, LayoutDashboard, LogOut, Menu, RefreshCw, Settings, ShieldCheck,
-  Stethoscope, Tags, UserCog, Handshake, LifeBuoy, FlaskConical, Users, X, Building2, CreditCard, Layers, AlertTriangle,
+  Stethoscope, Tags, UserCog, Handshake, LifeBuoy, FlaskConical, Users, X, Building2, CreditCard, Layers, AlertTriangle, IdCard,
 } from 'lucide-react';
 import { cx } from '@/components/ui';
 import { UserAvatar, displayName } from '@/components/avatar';
@@ -36,6 +36,7 @@ const ADMIN_NAV: NavItem[] = [
   { href: '/admin/payments', label: 'Pagos', icon: <CreditCard className="size-5" /> },
   { href: '/admin/requests', label: 'Solicitudes', icon: <LifeBuoy className="size-5" /> },
   { href: '/admin/catalogs', label: 'Catálogos', icon: <Tags className="size-5" /> },
+  { href: '/admin/dni', label: 'Consultas DNI', icon: <IdCard className="size-5" /> },
 ];
 
 export async function logout(tenantCode?: string | null) {

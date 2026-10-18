@@ -6,6 +6,7 @@ import { Badge, Button, Card, EmptyState, PageHeader, Spinner, Stat } from '@/co
 import { useToast } from '@/components/ui/toast';
 import { api, ApiError } from '@/lib/client/api';
 import { formatDate, formatMoney } from '@/lib/shared/format';
+import { DniAlert, DniUsageCard, type DniUsage } from './_components/dni-usage';
 
 type Dash = {
   kpis: { tenants_total: number; tenants_active: number; users_active: number; paid_this_month: number; open_requests?: number };
@@ -15,9 +16,11 @@ type Dash = {
 export default function AdminDashboard() {
   const toast = useToast();
   const [d, setD] = useState<Dash | null>(null);
+  const [dni, setDni] = useState<DniUsage | null>(null);
   useEffect(() => {
     api<Dash>('/api/admin/dashboard').then(setD)
       .catch((e) => toast.error(e instanceof ApiError ? e.message : 'No se pudo cargar el resumen.'));
+    api<DniUsage>('/api/admin/dni-usage').then(setDni).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const openRequests = Number(d?.kpis.open_requests ?? 0);
@@ -26,6 +29,7 @@ export default function AdminDashboard() {
       <PageHeader title="Resumen de plataforma" actions={<Link href="/admin/tenants/new"><Button icon={<Plus className="size-4" />}>Nueva clínica</Button></Link>} />
       {!d ? <Spinner /> : (
         <>
+          {dni?.enabled && <div className="mb-4"><DniAlert u={dni} /></div>}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
             <Stat label="Clínicas" value={d.kpis.tenants_total} icon={<Building2 className="size-5" />} />
             <Stat label="Activas" value={d.kpis.tenants_active} icon={<Building2 className="size-5" />} />
@@ -37,6 +41,7 @@ export default function AdminDashboard() {
                 hint={<span className="text-brand">Ver solicitudes →</span>} />
             </Link>
           </div>
+          {dni && <div className="mt-6"><DniUsageCard u={dni} /></div>}
           <Card className="mt-6">
             <div className="border-b border-line px-5 py-4"><h2 className="font-semibold">Vencimientos próximos (15 días)</h2></div>
             {d.expiring.length === 0 ? <EmptyState title="Sin vencimientos próximos" /> : (

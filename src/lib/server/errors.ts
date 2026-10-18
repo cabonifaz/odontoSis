@@ -65,6 +65,7 @@ const MESSAGES: Record<string, [number, string]> = {
   DNI_LOOKUP_DISABLED: [503, 'La consulta de DNI no está configurada. Ingresa los datos manualmente.'],
   DNI_NOT_FOUND: [404, 'No se encontraron datos para ese DNI.'],
   DNI_LOOKUP_FAILED: [502, 'No se pudo consultar el DNI en este momento. Ingresa los datos manualmente.'],
+  DNI_QUOTA_EXCEEDED: [429, 'Se agotó el cupo mensual de consultas de DNI. Ingresa los datos manualmente.'],
   REFERRAL_TARGET_REQUIRED: [400, 'Indica el especialista o clínica de destino, o el doctor de la clínica si la derivación es interna.'],
   BUDGET_NOT_FOUND: [400, 'Presupuesto no encontrado o no pertenece al paciente.'],
   GUARANTEE_DATES_INVALID: [400, 'La fecha de respuesta no puede ser anterior a la fecha de solicitud.'],
