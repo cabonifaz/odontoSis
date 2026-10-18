@@ -13,6 +13,8 @@ type PullResponse = {
   patients: Record<string, unknown>[]; appointments: Record<string, unknown>[]; budgets: Record<string, unknown>[];
   agreements: Record<string, unknown>[];
   branches: Record<string, unknown>[];
+  priceLists: Record<string, unknown>[];
+  priceListItems: Record<string, unknown>[];
 };
 
 type AppCtx = {
@@ -55,14 +57,14 @@ export function AppProvider({ session, children }: { session: ClientSession; chi
     const data = await api<PullResponse>(`/api/sync/pull?since=${encodeURIComponent(since)}`);
     // Los registros con cambios pendientes locales no se sobrescriben
     const pendingIds = new Set((await db.outbox.toArray()).map((o) => (o.payload as { id: string }).id));
-    const apply = async (table: keyof Pick<OfflineDb, 'masters' | 'doctors' | 'services' | 'patients' | 'appointments' | 'budgets' | 'agreements' | 'branches'>, rows: Record<string, unknown>[]) => {
+    const apply = async (table: keyof Pick<OfflineDb, 'masters' | 'doctors' | 'services' | 'patients' | 'appointments' | 'budgets' | 'agreements' | 'branches' | 'priceLists' | 'priceListItems'>, rows: Record<string, unknown>[]) => {
       const t = db[table] as unknown as { bulkPut: (r: unknown[]) => Promise<unknown>; bulkDelete: (k: string[]) => Promise<unknown> };
       const live = rows.filter((r) => !r.deleted_at && !pendingIds.has(r.id as string)).map(({ deleted_at: _d, ...r }) => r);
       const gone = rows.filter((r) => r.deleted_at).map((r) => r.id as string);
       if (live.length) await t.bulkPut(live);
       if (gone.length) await t.bulkDelete(gone);
     };
-    await db.transaction('rw', [db.masters, db.doctors, db.services, db.patients, db.appointments, db.budgets, db.agreements, db.branches, db.meta], async () => {
+    await db.transaction('rw', [db.masters, db.doctors, db.services, db.patients, db.appointments, db.budgets, db.agreements, db.branches, db.priceLists, db.priceListItems, db.meta], async () => {
       await apply('masters', data.masters);
       await apply('doctors', data.doctors);
       await apply('services', data.services);
@@ -71,6 +73,8 @@ export function AppProvider({ session, children }: { session: ClientSession; chi
       await apply('budgets', data.budgets);
       await apply('agreements', data.agreements ?? []);
       await apply('branches', data.branches ?? []);
+      await apply('priceLists', data.priceLists ?? []);
+      await apply('priceListItems', data.priceListItems ?? []);
       await db.meta.put({ key: 'lastSync', value: data.serverTime });
     });
     setLastSync(data.serverTime);
@@ -177,6 +181,33 @@ export function useBranches() {
     async () => (db ? (await db.branches.toArray()).filter((b) => b.is_active).sort((a, b) => b.is_main - a.is_main || a.name.localeCompare(b.name)) : []),
     [db], [],
   );
+}
+
+/** Tarifarios activos (predeterminado primero) */
+export function usePriceLists() {
+  const { db } = useApp();
+  return useLiveQuery(
+    async () => (db ? (await db.priceLists.toArray()).filter((l) => l.is_active).sort((a, b) => b.is_default - a.is_default || a.name.localeCompare(b.name)) : []),
+    [db], [],
+  );
+}
+
+/** Precio de cada servicio en un tarifario (si no tiene precio propio, se usa el base) */
+export function usePriceMap(priceListId: string | null | undefined) {
+  const { db } = useApp();
+  return useLiveQuery(
+    async () => (db && priceListId ? new Map((await db.priceListItems.where('price_list_id').equals(priceListId).toArray()).map((i) => [i.service_id, Number(i.price)])) : new Map<string, number>()),
+    [db, priceListId], new Map<string, number>(),
+  );
+}
+
+/** Ficha efectiva: la de la sede (si la define) o la de la clínica */
+export function useFormMode(branchId?: string | null): 'STANDARD' | 'ADVANCED' {
+  const { session } = useApp();
+  const branches = useBranches();
+  const b = branchId ? branches.find((x) => x.id === branchId) : branches.find((x) => x.is_main) ?? branches[0];
+  const own = b?.patient_form_mode;
+  return own === 'ADVANCED' || own === 'STANDARD' ? own : session.tenant?.patientFormMode ?? 'STANDARD';
 }
 
 export const can = (s: ClientSession, perm: string) => s.permissions.includes(perm) || s.permissions.includes('platform.*');

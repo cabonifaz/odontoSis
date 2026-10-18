@@ -6,7 +6,7 @@ DELIMITER $$
 DROP PROCEDURE IF EXISTS sp_branch_list $$
 CREATE PROCEDURE sp_branch_list(IN p_tenant_id CHAR(36), IN p_include_inactive TINYINT)
 BEGIN
-  SELECT b.id, b.code, b.name, b.address, b.phone, b.is_main, b.is_active, b.updated_at
+  SELECT b.id, b.code, b.name, b.address, b.phone, b.is_main, b.is_active, b.patient_form_mode, b.updated_at
     FROM branch b
    WHERE b.tenant_id = p_tenant_id AND b.deleted_at IS NULL AND (p_include_inactive = 1 OR b.is_active = 1)
    ORDER BY b.is_main DESC, b.name;
@@ -26,7 +26,8 @@ END $$
 DROP PROCEDURE IF EXISTS sp_branch_save $$
 CREATE PROCEDURE sp_branch_save(
   IN p_tenant_id CHAR(36), IN p_actor_id CHAR(36), IN p_ip VARCHAR(64), IN p_id CHAR(36), IN p_code VARCHAR(20),
-  IN p_name VARCHAR(120), IN p_address VARCHAR(300), IN p_phone VARCHAR(40), IN p_is_main TINYINT, IN p_is_active TINYINT)
+  IN p_name VARCHAR(120), IN p_address VARCHAR(300), IN p_phone VARCHAR(40), IN p_is_main TINYINT, IN p_is_active TINYINT,
+  IN p_patient_form_mode VARCHAR(20))
 BEGIN
   DECLARE v_owner CHAR(36) DEFAULT NULL; DECLARE v_was_active TINYINT DEFAULT 0; DECLARE v_was_main TINYINT DEFAULT 0;
   DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
@@ -48,11 +49,13 @@ BEGIN
   END IF;
   IF v_owner IS NOT NULL THEN
     UPDATE branch SET code = p_code, name = p_name, address = p_address, phone = p_phone, is_main = p_is_main,
-           is_active = p_is_active, updated_by = p_actor_id
+           is_active = p_is_active, patient_form_mode = IF(p_patient_form_mode IN ('STANDARD', 'ADVANCED'), p_patient_form_mode, NULL),
+           updated_by = p_actor_id
      WHERE id = p_id;
   ELSE
-    INSERT INTO branch (id, tenant_id, code, name, address, phone, is_main, is_active, created_by, updated_by)
-    VALUES (p_id, p_tenant_id, p_code, p_name, p_address, p_phone, p_is_main, p_is_active, p_actor_id, p_actor_id);
+    INSERT INTO branch (id, tenant_id, code, name, address, phone, is_main, is_active, patient_form_mode, created_by, updated_by)
+    VALUES (p_id, p_tenant_id, p_code, p_name, p_address, p_phone, p_is_main, p_is_active,
+            IF(p_patient_form_mode IN ('STANDARD', 'ADVANCED'), p_patient_form_mode, NULL), p_actor_id, p_actor_id);
   END IF;
   CALL sp_audit_log_add(p_tenant_id, p_actor_id, 'branch', p_id, IF(v_owner IS NULL, 'CREATE', 'UPDATE'),
        JSON_OBJECT('code', p_code, 'name', p_name, 'isMain', p_is_main, 'isActive', p_is_active), p_ip);

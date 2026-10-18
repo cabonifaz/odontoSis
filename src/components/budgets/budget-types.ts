@@ -7,6 +7,7 @@ export type BudgetDetail = {
   doctor_name: string | null; doctor_license: string | null; status_code: string; status_name: string; status_color: string;
   currency_code: string; currency_symbol: string; insurance_company: string | null; deductible: number; coinsurance_pct: number;
   subtotal: number; discount: number; total: number; notes: string | null; created_at: string; updated_at: string;
+  price_list_id: string | null; price_list_name: string | null; patient_mother_last_name: string | null;
   branch_id: string | null; branch_name: string | null; branch_address: string | null; branch_phone: string | null;
   agreement_id: string | null; agreement_name: string | null; agreement_discount_pct: number; agreement_member_code: string | null;
   tenant_name: string; tenant_legal_name: string; tenant_tax_id: string | null; tenant_address: string | null; tenant_phone: string | null;

@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { Plus, Trash2, X } from 'lucide-react';
 import { Button, Card, cx, Input, Select, Textarea } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
-import { useAgreements, useApp, useBranches, useMasters } from '@/lib/client/app-context';
+import { useAgreements, useApp, useBranches, useMasters, usePriceLists, usePriceMap } from '@/lib/client/app-context';
 import { ApiError } from '@/lib/client/api';
 import { PatientPicker, ServicePicker } from '@/components/pickers';
 import { Odontogram, OdontogramLegend, toConditions, type Mark, type Selection, type Surface } from '@/components/odontogram/odontogram';
@@ -22,7 +22,7 @@ export type BudgetDraft = Omit<BudgetInput, 'marks'> & { marks: Mark[] };
 export function emptyBudget(tz: string, patientId?: string | null, doctorId?: string | null): BudgetDraft {
   return {
     id: crypto.randomUUID(), patientId: patientId ?? '', doctorId: doctorId ?? null, budgetDate: todayIn(tz), statusCode: 'DRAFT',
-    insuranceCompany: null, deductible: 0, coinsurancePct: 0, discount: 0, agreementId: null, branchId: null, notes: null, items: [], marks: [],
+    insuranceCompany: null, deductible: 0, coinsurancePct: 0, discount: 0, agreementId: null, branchId: null, priceListId: null, notes: null, items: [], marks: [],
   };
 }
 
@@ -48,6 +48,10 @@ export function BudgetEditor({ initial, onSaved, onCancel }: { initial: BudgetDr
   const [b, setB] = useState<BudgetDraft>(initial);
   const agreements = useAgreements(b.budgetDate);
   const branches = useBranches();
+  const priceLists = usePriceLists();
+  const effectiveListId = b.priceListId ?? priceLists.find((l) => l.is_default)?.id ?? null;
+  const priceMap = usePriceMap(effectiveListId);
+  const priceOf = (svc: LService) => priceMap.get(svc.id) ?? Number(svc.price);
   const agreement = agreements.find((a) => a.id === b.agreementId) ?? null;
   const pct = agreement ? Number(agreement.discount_pct) : 0;
   const [tool, setTool] = useState<string | null>(null);
@@ -100,7 +104,7 @@ export function BudgetEditor({ initial, onSaved, onCancel }: { initial: BudgetDr
     const surfaces = !general && sel ? SURFACE_ORDER.filter((s) => sel.surfaces.includes(s)).join('') : null;
     const item = withInsurance({
       id: crypto.randomUUID(), toothCode: general ? null : sel?.toothCode ?? null, surfaces: surfaces || null,
-      serviceId: service.id, description: service.name, quantity: 1, unitPrice: Number(service.price),
+      serviceId: service.id, description: service.name, quantity: 1, unitPrice: priceOf(service),
     });
     patch({ items: [...b.items, item] });
     setService(null);
@@ -110,7 +114,7 @@ export function BudgetEditor({ initial, onSaved, onCancel }: { initial: BudgetDr
     setB((x) => ({ ...x, items: x.items.map((i) => (i.id === id ? withInsurance({ ...i, ...p }, x) : i)) }));
 
   async function save() {
-    const parsed = budgetSchema.safeParse(b);
+    const parsed = budgetSchema.safeParse({ ...b, priceListId: effectiveListId });
     if (!parsed.success) {
       setErrors(Object.fromEntries(parsed.error.issues.map((i) => [i.path[0]?.toString() ?? '', i.message])));
       toast.error(parsed.error.issues[0]?.message ?? 'Revisa el presupuesto.');
@@ -150,6 +154,7 @@ export function BudgetEditor({ initial, onSaved, onCancel }: { initial: BudgetDr
                 coinsurancePct: Number(p?.coinsurance_pct ?? 0),
                 // el convenio del paciente se aplica si está vigente a la fecha del presupuesto
                 agreementId: p?.agreement_id && agreements.some((a) => a.id === p.agreement_id) ? p.agreement_id : null,
+                priceListId: p?.price_list_id ?? null,
               })} />
           </div>
           <Select label="Doctor tratante" value={b.doctorId ?? ''} onChange={(e) => patch({ doctorId: e.target.value || null })} placeholder="—"
@@ -162,6 +167,11 @@ export function BudgetEditor({ initial, onSaved, onCancel }: { initial: BudgetDr
           <Input label="Compañía de seguros" value={b.insuranceCompany ?? ''} placeholder="Particular" onChange={(e) => recalc({ insuranceCompany: e.target.value || null })} />
           <Input label="Deducible por pieza" type="number" min="0" step="0.01" value={b.deductible} disabled={!b.insuranceCompany} onChange={(e) => recalc({ deductible: Number(e.target.value) || 0 })} />
           <Input label="Coaseguro %" type="number" min="0" max="100" step="0.01" value={b.coinsurancePct} disabled={!b.insuranceCompany} onChange={(e) => recalc({ coinsurancePct: Number(e.target.value) || 0 })} />
+          {priceLists.length > 1 && (
+            <Select label="Tarifario" value={effectiveListId ?? ''} onChange={(e) => patch({ priceListId: e.target.value || null })}
+              hint="Los tratamientos nuevos toman el precio de este tarifario"
+              options={priceLists.map((l) => ({ value: l.id, label: `${l.group_name ? `${l.group_name} · ` : ''}${l.name}` }))} />
+          )}
           <Select label="Convenio" value={b.agreementId ?? ''} onChange={(e) => recalc({ agreementId: e.target.value || null })} placeholder="Sin convenio"
             hint={agreement ? `Descuento de ${pct} % sobre la lista de precios` : undefined}
             options={agreements.map((a) => ({ value: a.id, label: `${a.name} (${Number(a.discount_pct)} %)` }))} />

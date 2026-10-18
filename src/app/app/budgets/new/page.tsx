@@ -24,7 +24,7 @@ export default function NewBudgetPage() {
       const valid = !!ag && !!ag.is_active && (!ag.valid_from || ag.valid_from.slice(0, 10) <= d.budgetDate) && (!ag.valid_to || ag.valid_to.slice(0, 10) >= d.budgetDate);
       setDraft({
         ...d, insuranceCompany: p.insurance_company, deductible: Number(p.deductible ?? 0), coinsurancePct: Number(p.coinsurance_pct ?? 0),
-        agreementId: valid ? p.agreement_id ?? null : null,
+        agreementId: valid ? p.agreement_id ?? null : null, priceListId: p.price_list_id ?? null, branchId: p.home_branch_id ?? null,
       });
     })();
   }, [db, params, session]);

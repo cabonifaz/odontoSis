@@ -7,6 +7,7 @@ import {
   Stethoscope, Tags, UserCog, Handshake, LifeBuoy, FlaskConical, Users, X, Building2, CreditCard, Layers, AlertTriangle,
 } from 'lucide-react';
 import { cx } from '@/components/ui';
+import { UserAvatar, displayName } from '@/components/avatar';
 import { useApp, can } from '@/lib/client/app-context';
 import { api } from '@/lib/client/api';
 import { wipeLocalData } from '@/lib/client/offline-db';
@@ -81,7 +82,13 @@ export function AppShell({ session, children }: { session: ClientSession; childr
         <button onClick={() => logout(session.tenant?.code)} className="flex w-full items-center gap-3 rounded-control px-3 py-2 text-sm text-muted hover:bg-surface-2 hover:text-fg">
           <LogOut className="size-5" /> Cerrar sesión
         </button>
-        <p className="mt-2 truncate px-3 text-xs text-subtle" title={session.email}>{session.fullName}</p>
+        <Link href="/account/security" onClick={() => setOpen(false)} className="mt-2 flex items-center gap-2.5 rounded-control px-3 py-2 hover:bg-surface-2" title={session.email}>
+          <UserAvatar avatar={session.avatar} name={session.fullName} size={32} />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium">{displayName(session)}</span>
+            <span className="block truncate text-xs text-subtle">{session.nickname ? session.fullName : session.roleName}</span>
+          </span>
+        </Link>
       </div>
     </div>
   );

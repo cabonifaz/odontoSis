@@ -3,7 +3,7 @@ import type { z } from 'zod';
 import { callSp, spOne, spRows, type Row } from '../db';
 import { blindIndex, decrypt, encrypt } from '../crypto';
 import type {
-  AppointmentInput, BudgetInput, PatientInput, agreementSchema, branchSchema, doctorSchema, masterItemSchema, serviceSchema, tenantSettingsSchema,
+  AppointmentInput, BudgetInput, PatientInput, agreementSchema, branchSchema, doctorSchema, priceListSchema, masterItemSchema, serviceSchema, tenantSettingsSchema,
 } from '@/lib/shared/schemas';
 import { toDbDateTime } from '@/lib/shared/format';
 
@@ -30,7 +30,7 @@ export async function listDoctors(tenantId: string, includeInactive = false) {
 }
 export const saveDoctor = (c: Ctx, d: z.infer<typeof doctorSchema>) =>
   callSp('sp_doctor_save', [...base(c), d.id, d.userId, d.firstName, d.lastName, d.licenseNumber, d.specialtyId, d.email,
-    encrypt(d.phone), d.agendaColor, d.isActive]);
+    encrypt(d.phone), d.agendaColor, d.isActive, d.birthDate ?? null]);
 export const deleteDoctor = (c: Ctx, id: string) => callSp('sp_doctor_delete', [...base(c), id]);
 
 // ---------------- Pacientes ----------------
@@ -42,8 +42,8 @@ export async function listPatients(tenantId: string, q: { search?: string | null
   if (docBidx && rows.length === 0) rows = await spRows('sp_patient_list', [tenantId, search, null, q.limit ?? 50, q.offset ?? 0]);
   return {
     total: Number(rows[0]?.total_count ?? 0),
-    rows: rows.map(({ doc_number_enc, phone_enc, total_count: _t, ...r }) => ({
-      ...r, doc_number: decrypt(doc_number_enc), phone: decrypt(phone_enc),
+    rows: rows.map(({ doc_number_enc, phone_enc, mobile_enc, total_count: _t, ...r }) => ({
+      ...r, doc_number: decrypt(doc_number_enc), phone: decrypt(mobile_enc) ?? decrypt(phone_enc),
     })),
   };
 }
@@ -59,6 +59,15 @@ export async function getPatient(c: Ctx, id: string) {
     insuranceCompany: r.insurance_company, deductible: r.deductible, coinsurancePct: r.coinsurance_pct,
     allergies: decrypt(r.allergies_enc), medicalHistory: decrypt(r.medical_history_enc), notes: decrypt(r.notes_enc),
     isActive: !!r.is_active, createdAt: r.created_at, updatedAt: r.updated_at,
+    motherLastName: r.mother_last_name, mobile: decrypt(r.mobile_enc), messaging: decrypt(r.messaging_enc),
+    maritalStatusId: r.marital_status_id, acquisitionSourceId: r.acquisition_source_id, cardNumber: r.card_number,
+    districtId: r.district_id, districtName: r.district_name, provinceId: r.province_id, provinceName: r.province_name,
+    departmentId: r.department_id, departmentName: r.department_name,
+    homeBranchId: r.home_branch_id, homeBranchName: r.home_branch_name, assignedDoctorId: r.assigned_doctor_id,
+    assignedDoctorName: r.assigned_doctor_name, attentionTypeId: r.attention_type_id, attentionTypeName: r.attention_type_name,
+    priceListId: r.price_list_id, priceListName: r.price_list_name, priceListGroup: r.price_list_group,
+    titularPatientId: r.titular_patient_id, titularName: r.titular_name, titularRecordNumber: r.titular_record_number,
+    titularRelationshipId: r.titular_relationship_id, titularRelationshipName: r.titular_relationship_name,
     requiresGuardian: !!r.requires_guardian, guardianName: r.guardian_name, guardianRelationshipId: r.guardian_relationship_id,
     guardianRelationshipName: r.guardian_relationship_name, guardianDocTypeId: r.guardian_doc_type_id,
     guardianDocTypeCode: r.guardian_doc_type_code, guardianDocNumber: decrypt(r.guardian_doc_number_enc),
@@ -73,8 +82,36 @@ export async function savePatient(c: Ctx, p: PatientInput) {
     p.firstName, p.lastName, p.birthDate, p.sexId, encrypt(p.phone), encrypt(p.email), encrypt(p.address),
     p.insuranceCompany, p.deductible, p.coinsurancePct, encrypt(p.allergies), encrypt(p.medicalHistory), encrypt(p.notes), p.isActive,
     p.requiresGuardian, p.guardianName, p.guardianRelationshipId, p.guardianDocTypeId, encrypt(p.guardianDocNumber),
-    encrypt(p.guardianPhone), encrypt(p.guardianEmail), p.agreementId, p.agreementMemberCode, p.agreementId ? null : p.agreementName]);
+    encrypt(p.guardianPhone), encrypt(p.guardianEmail), p.agreementId, p.agreementMemberCode, p.agreementId ? null : p.agreementName,
+    JSON.stringify({
+      motherLastName: p.motherLastName ?? null, mobileEnc: encrypt(p.mobile), messagingEnc: encrypt(p.messaging),
+      maritalStatusId: p.maritalStatusId ?? null, acquisitionSourceId: p.acquisitionSourceId ?? null, cardNumber: p.cardNumber ?? null,
+      districtId: p.districtId ?? null, homeBranchId: p.homeBranchId ?? null, assignedDoctorId: p.assignedDoctorId ?? null,
+      attentionTypeId: p.attentionTypeId ?? null, priceListId: p.priceListId ?? null,
+      titularPatientId: p.titularPatientId ?? null, titularRelationshipId: p.titularRelationshipId ?? null,
+    })]);
 }
+export const patientDependents = (tenantId: string, patientId: string) => spRows('sp_patient_dependents', [tenantId, patientId]);
+
+/** Cumpleaños próximos: pacientes (ofertas comerciales) y personal (saludos / presentes) */
+export async function birthdays(tenantId: string, today: string, days = 7) {
+  const [patients, staff] = await callSp('sp_birthdays', [tenantId, today, days]);
+  return {
+    patients: patients.map(({ phone_enc, mobile_enc, messaging_enc, ...p }) => ({
+      ...p, phone: decrypt(mobile_enc) ?? decrypt(phone_enc), messaging: decrypt(messaging_enc),
+    })),
+    staff,
+  };
+}
+
+// ---------------- Tarifarios ----------------
+export const listPriceLists = (tenantId: string, includeInactive = false) => spRows('sp_price_list_list', [tenantId, includeInactive ? 1 : 0]);
+export const savePriceList = (c: Ctx, l: z.infer<typeof priceListSchema>) =>
+  callSp('sp_price_list_save', [...base(c), l.id, l.code.toUpperCase(), l.name, l.groupName, l.branchId, l.isDefault, l.isActive]);
+export const deletePriceList = (c: Ctx, id: string) => callSp('sp_price_list_delete', [...base(c), id]);
+export const priceListItems = (tenantId: string, id: string) => spRows('sp_price_list_items', [tenantId, id]);
+export const setPriceListItem = (c: Ctx, listId: string, serviceId: string, price: number | null) =>
+  callSp('sp_price_list_item_set', [...base(c), listId, serviceId, price]);
 export const deletePatient = (c: Ctx, id: string) => callSp('sp_patient_delete', [...base(c), id]);
 
 export const getPatientOdontogram = (tenantId: string, patientId: string) => spRows('sp_odontogram_patient_get', [tenantId, patientId]);
@@ -84,7 +121,7 @@ export const savePatientOdontogram = (c: Ctx, patientId: string, marks: unknown[
 // ---------------- Sedes (las habilita el super admin; la clínica sólo las consulta) ----------------
 export const listBranches = (tenantId: string, includeInactive = false) => spRows('sp_branch_list', [tenantId, includeInactive ? 1 : 0]);
 export const saveBranch = (c: Ctx, b: z.infer<typeof branchSchema>) =>
-  callSp('sp_branch_save', [...base(c), b.id, b.code.toUpperCase(), b.name, b.address, b.phone, b.isMain, b.isActive]);
+  callSp('sp_branch_save', [...base(c), b.id, b.code.toUpperCase(), b.name, b.address, b.phone, b.isMain, b.isActive, b.patientFormMode ?? null]);
 export const deleteBranch = (c: Ctx, id: string) => callSp('sp_branch_delete', [...base(c), id]);
 
 // ---------------- Convenios ----------------
@@ -118,7 +155,7 @@ export async function getBudget(tenantId: string, id: string) {
 /** canEdit: el usuario puede modificar presupuestos ya emitidos (budgets.edit). El SP lo valida. */
 export const saveBudget = (c: Ctx, b: BudgetInput, canEdit: boolean) =>
   spOne('sp_budget_save', [...base(c), b.id, b.patientId, b.doctorId, b.budgetDate, b.statusCode, b.insuranceCompany,
-    b.deductible, b.coinsurancePct, b.discount, b.notes, JSON.stringify(b.items), JSON.stringify(b.marks), b.agreementId, canEdit, b.branchId]);
+    b.deductible, b.coinsurancePct, b.discount, b.notes, JSON.stringify(b.items), JSON.stringify(b.marks), b.agreementId, canEdit, b.branchId, b.priceListId ?? null]);
 export const setBudgetStatus = (c: Ctx, id: string, status: string) => callSp('sp_budget_status_set', [...base(c), id, status]);
 export const deleteBudget = (c: Ctx, id: string) => callSp('sp_budget_delete', [...base(c), id]);
 
@@ -139,10 +176,13 @@ export async function tenantDashboard(tenantId: string, dayStart: Date, dayEnd: 
 
 // ---------------- Sincronización offline ----------------
 export async function syncPull(tenantId: string, since: string | null) {
-  const [time, masters, doctors, services, patients, appointments, budgets, agreements, branches] = await callSp('sp_sync_pull', [tenantId, since]);
+  const [time, masters, doctors, services, patients, appointments, budgets, agreements, branches, priceLists, priceListItems] =
+    await callSp('sp_sync_pull', [tenantId, since]);
   return {
     serverTime: time[0].server_time as string,
-    masters, doctors, services, appointments, budgets, agreements, branches,
-    patients: patients.map(({ phone_enc, guardian_phone_enc, ...p }) => ({ ...p, phone: decrypt(phone_enc), guardian_phone: decrypt(guardian_phone_enc) })),
+    masters, doctors, services, appointments, budgets, agreements, branches, priceLists, priceListItems,
+    patients: patients.map(({ phone_enc, mobile_enc, guardian_phone_enc, ...p }) => ({
+      ...p, phone: decrypt(mobile_enc) ?? decrypt(phone_enc), guardian_phone: decrypt(guardian_phone_enc),
+    })),
   };
 }

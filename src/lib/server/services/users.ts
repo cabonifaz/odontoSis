@@ -30,3 +30,7 @@ export async function resetUserPassword(tenantId: string | null, a: Actor, id: s
   await callSp('sp_user_reset_password', [tenantId, a.userId, a.ip, id, await hashPassword(tempPassword)]);
   return { tempPassword };
 }
+
+/** Perfil propio (apodo, avatar, cumpleaños) */
+export const updateProfile = (userId: string, ip: string | null, p: { fullName: string; nickname?: string | null; avatar?: string | null; birthDate?: string | null }) =>
+  callSp('sp_user_profile_update', [userId, ip, p.fullName, p.nickname ?? null, p.avatar ?? null, p.birthDate ?? null]);

@@ -42,7 +42,7 @@ export default function BudgetPage() {
     const draft: BudgetDraft = {
       id: b.id, patientId: b.patient_id, doctorId: b.doctor_id, budgetDate: b.budget_date, statusCode: b.status_code as BudgetDraft['statusCode'],
       insuranceCompany: b.insurance_company, deductible: Number(b.deductible), coinsurancePct: Number(b.coinsurance_pct), discount: Number(b.discount),
-      agreementId: b.agreement_id, branchId: b.branch_id,
+      agreementId: b.agreement_id, branchId: b.branch_id, priceListId: b.price_list_id,
       notes: b.notes, items: b.items.map((i) => ({ id: i.id, toothCode: i.tooth_code, surfaces: i.surfaces, serviceId: i.service_id, description: i.description,
         quantity: Number(i.quantity), unitPrice: Number(i.unit_price), deductible: Number(i.deductible), coinsurance: Number(i.coinsurance) })),
       marks: b.marks.map((m) => ({ toothCode: m.tooth_code, surface: m.surface, conditionId: m.condition_id })),

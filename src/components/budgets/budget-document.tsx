@@ -44,7 +44,7 @@ export function BudgetDocument({ b }: { b: BudgetDetail; timezone: string }) {
       </header>
 
       <section className="grid gap-x-8 gap-y-1 border-b border-line py-4 sm:grid-cols-2">
-        <Row k="Paciente" v={`${b.patient_last_name}, ${b.patient_first_name}`} />
+        <Row k="Paciente" v={`${[b.patient_last_name, b.patient_mother_last_name].filter(Boolean).join(' ')}, ${b.patient_first_name}`} />
         <Row k="H.C. N°" v={b.record_number} />
         <Row k="Doctor" v={b.doctor_name ? `${b.doctor_name}${b.doctor_license ? ` (${b.doctor_license})` : ''}` : '—'} />
         <Row k="Documento" v={b.doc_number ? `${b.doc_type_code ?? ''} ${b.doc_number}` : '—'} />

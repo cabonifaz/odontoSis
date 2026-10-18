@@ -72,7 +72,7 @@ CREATE PROCEDURE sp_tenant_get(IN p_id CHAR(36))
 BEGIN
   SELECT t.id, t.code, t.legal_name, t.trade_name, t.tax_id, t.email, t.phone, t.address,
          t.plan_id, p.name AS plan_name, p.max_users AS plan_max_users, p.max_branches AS plan_max_branches, t.max_users_override,
-         t.max_branches_override, COALESCE(t.max_branches_override, p.max_branches) AS max_branches,
+         t.max_branches_override, COALESCE(t.max_branches_override, p.max_branches) AS max_branches, t.patient_form_mode,
          (SELECT COUNT(*) FROM branch b WHERE b.tenant_id = t.id AND b.deleted_at IS NULL AND b.is_active = 1) AS active_branches,
          COALESCE(t.max_users_override, p.max_users) AS max_users,
          ts.code AS status_code, ts.name AS status_name, ts.value AS status_color, t.primary_color, t.secondary_color, t.logo_file_id,
@@ -139,6 +139,9 @@ BEGIN
   -- Toda clínica nace con su sede principal
   INSERT INTO branch (id, tenant_id, code, name, address, phone, is_main, is_active, created_by, updated_by)
   VALUES (UUID(), p_id, 'PRINCIPAL', 'Sede principal', p_address, p_phone, 1, 1, p_actor_id, p_actor_id);
+  -- ... y su tarifario por defecto
+  INSERT INTO price_list (id, tenant_id, code, name, group_name, is_default, is_active, created_by, updated_by)
+  VALUES (UUID(), p_id, 'PARTICULAR', 'Particular', 'Tarifario general', 1, 1, p_actor_id, p_actor_id);
   CALL sp_audit_log_add(p_id, p_actor_id, 'tenant', p_id, 'CREATE',
        JSON_OBJECT('code', LOWER(p_code), 'tradeName', p_trade_name, 'planId', p_plan_id, 'adminEmail', LOWER(TRIM(p_admin_email))), p_ip);
   COMMIT;
@@ -150,7 +153,7 @@ CREATE PROCEDURE sp_tenant_update(
   IN p_trade_name VARCHAR(200), IN p_tax_id VARCHAR(20), IN p_email VARCHAR(200), IN p_phone VARCHAR(40),
   IN p_address VARCHAR(300), IN p_plan_id CHAR(36), IN p_status_code VARCHAR(60), IN p_max_users_override INT,
   IN p_currency_code VARCHAR(60), IN p_timezone VARCHAR(64), IN p_implementation_start DATE, IN p_implementation_end DATE,
-  IN p_implementation_max_patients INT, IN p_max_branches_override INT)
+  IN p_implementation_max_patients INT, IN p_max_branches_override INT, IN p_patient_form_mode VARCHAR(20))
 BEGIN
   DECLARE v_status CHAR(36); DECLARE v_cur CHAR(36);
   CALL sp__master_id('TENANT_STATUS', p_status_code, NULL, v_status);
@@ -176,6 +179,7 @@ BEGIN
          currency_id = v_cur, timezone = COALESCE(p_timezone, timezone),
          implementation_start = p_implementation_start, implementation_end = p_implementation_end,
          implementation_max_patients = p_implementation_max_patients, max_branches_override = p_max_branches_override,
+         patient_form_mode = IF(p_patient_form_mode IN ('STANDARD', 'ADVANCED'), p_patient_form_mode, patient_form_mode),
          updated_by = p_actor_id
    WHERE id = p_id;
   CALL sp_audit_log_add(p_id, p_actor_id, 'tenant', p_id, 'UPDATE',

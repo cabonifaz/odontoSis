@@ -6,10 +6,12 @@ import { useToast } from '@/components/ui/toast';
 import { api, ApiError, fieldErrors } from '@/lib/client/api';
 import { useApp } from '@/lib/client/app-context';
 import { TempPasswordModal } from '@/components/users/temp-password-modal';
+import { DocumentNumberInput } from '@/components/dni-lookup';
+import { UserAvatar } from '@/components/avatar';
 import { formatDateTime } from '@/lib/shared/format';
 import { effectivePermissions, USER_GRANTABLE_PERMISSIONS, type PermissionOverrides } from '@/lib/shared/types';
 
-type U = { id: string; email: string; full_name: string; is_active: number; totp_enabled: number; last_login_at: string | null; locked_until: string | null; role_code: string; role_name: string; role_permissions: string[]; permission_overrides: PermissionOverrides | null };
+type U = { id: string; email: string; full_name: string; nickname: string | null; avatar: string | null; is_active: number; totp_enabled: number; last_login_at: string | null; locked_until: string | null; role_code: string; role_name: string; role_permissions: string[]; permission_overrides: PermissionOverrides | null };
 type Role = { id: string; code: string; name: string; permissions: string[] };
 type Usage = { plan_name: string; max_users: number; active_users: number };
 type Form = { id: string; email: string; fullName: string; roleCode: string; isActive: boolean; isNew: boolean; perms: Record<string, boolean> };
@@ -32,6 +34,7 @@ export default function UsersPage() {
   const [form, setForm] = useState<Form | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [dni, setDni] = useState('');
   const [temp, setTemp] = useState<{ email: string; tempPassword: string } | null>(null);
   const [confirm, setConfirm] = useState<{ kind: 'delete' | 'reset'; u: U } | null>(null);
 
@@ -100,7 +103,12 @@ export default function UsersPage() {
             <tbody>
               {data.users.map((u) => (
                 <tr key={u.id}>
-                  <Td label="Nombre"><p className="font-medium">{u.full_name}</p><p className="text-xs text-muted">{u.email}</p></Td>
+                  <Td label="Nombre">
+                    <span className="flex items-center gap-2.5">
+                      <UserAvatar avatar={u.avatar} name={u.full_name} size={32} />
+                      <span><p className="font-medium">{u.full_name}{u.nickname ? <span className="font-normal text-muted"> · “{u.nickname}”</span> : null}</p><p className="text-xs text-muted">{u.email}</p></span>
+                    </span>
+                  </Td>
                   <Td label="Rol">{u.role_name}</Td>
                   <Td label="Estado">
                     <span className="flex flex-wrap gap-1">
@@ -128,6 +136,10 @@ export default function UsersPage() {
         {form && data && (
           <div className="grid gap-4">
             <Input label="Correo" type="email" required disabled={!form.isNew} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} error={errors.email} />
+            {form.isNew && (
+              <DocumentNumberInput label="DNI (para traer el nombre de RENIEC)" isDni value={dni} onChange={setDni}
+                onFound={(r) => setForm({ ...form, fullName: r.fullName })} />
+            )}
             <Input label="Nombre completo" required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} error={errors.fullName} />
             <Select label="Rol" value={form.roleCode} onChange={(e) => setForm({ ...form, roleCode: e.target.value, perms: userPerms(rolePermsOf(e.target.value), null) })} options={data.roles.map((r) => ({ value: r.code, label: r.name }))} />
             <fieldset className="rounded-control border border-line p-3">

@@ -5,6 +5,7 @@ import { AppProvider } from '@/lib/client/app-context';
 import { Card, PageHeader } from '@/components/ui';
 import { ChangePasswordForm } from '@/components/shell/change-password-form';
 import { TotpSetup } from './totp-setup';
+import { ProfileForm } from './profile-form';
 
 export const metadata = { title: 'Seguridad de la cuenta' };
 
@@ -17,6 +18,10 @@ export default async function SecurityPage({ searchParams }: { searchParams: Pro
       <BrandStyle session={cs} />
       <AppShell session={cs}>
         <PageHeader title="Mi cuenta y seguridad" subtitle={`${s.fullName} · ${s.email}`} />
+        <Card className="mb-6 p-6">
+          <h2 className="mb-4 font-semibold">Mi perfil</h2>
+          <ProfileForm initial={{ fullName: s.fullName, nickname: s.nickname, avatar: s.avatar, birthDate: s.birthDate }} />
+        </Card>
         {required && !s.totpEnabled && (
           <p role="alert" className="mb-6 rounded-card border border-warning/40 bg-warning/10 p-4 text-sm">
             Las cuentas de administración de plataforma deben activar la verificación en dos pasos para continuar.

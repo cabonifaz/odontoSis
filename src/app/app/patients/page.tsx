@@ -20,7 +20,7 @@ export default function PatientsPage() {
   const filtered = useMemo(() => {
     if (!all) return [];
     const n = norm(q.trim());
-    return n ? all.filter((p) => norm(`${p.first_name} ${p.last_name} ${p.last_name} ${p.first_name}`).includes(n) || p.record_number === q.trim() || p.phone?.replace(/\s/g, '').includes(q.replace(/\s/g, ''))) : all;
+    return n ? all.filter((p) => norm(`${p.first_name} ${p.last_name} ${p.mother_last_name ?? ''} ${p.last_name} ${p.mother_last_name ?? ''} ${p.first_name}`).includes(n) || p.record_number === q.trim() || p.phone?.replace(/\s/g, '').includes(q.replace(/\s/g, ''))) : all;
   }, [all, q]);
 
   return (
@@ -45,7 +45,7 @@ export default function PatientsPage() {
                   <tr key={p.id} className="cursor-pointer hover:bg-surface-2" onClick={() => router.push(`/app/patients/${p.id}`)}>
                     <Td label="H.C." className="font-mono text-xs">{p.record_number ?? '—'}</Td>
                     <Td label="Paciente">
-                      <Link href={`/app/patients/${p.id}`} className="font-medium hover:text-brand">{p.last_name}, {p.first_name}</Link>
+                      <Link href={`/app/patients/${p.id}`} className="font-medium hover:text-brand">{[p.last_name, p.mother_last_name].filter(Boolean).join(' ')}, {p.first_name}</Link>
                       {!!p.requires_guardian && p.guardian_name && <p className="text-xs text-muted">Apoderado: {p.guardian_name}{p.guardian_relationship_name ? ` (${p.guardian_relationship_name})` : ''}</p>}
                     </Td>
                     <Td label="Edad">{ageFrom(p.birth_date) ?? '—'}</Td>

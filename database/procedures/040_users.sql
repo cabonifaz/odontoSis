@@ -67,7 +67,7 @@ END $$
 DROP PROCEDURE IF EXISTS sp_user_list $$
 CREATE PROCEDURE sp_user_list(IN p_tenant_id CHAR(36))
 BEGIN
-  SELECT u.id, u.tenant_id, u.email, u.full_name, u.is_active, u.must_change_password, u.totp_enabled,
+  SELECT u.id, u.tenant_id, u.email, u.full_name, u.nickname, u.avatar, u.birth_date, u.is_active, u.must_change_password, u.totp_enabled,
          u.last_login_at, u.locked_until, r.code AS role_code, r.name AS role_name, r.permissions AS role_permissions,
          u.permission_overrides, u.created_at, u.updated_at,
          (SELECT d.id FROM doctor d WHERE d.user_id = u.id AND d.deleted_at IS NULL LIMIT 1) AS doctor_id
@@ -146,6 +146,23 @@ BEGIN
   END IF;
   CALL sp_user_password_set(p_id, p_password_hash, 1, p_actor_id, p_ip);
   CALL sp_session_revoke_user(p_id, NULL, p_actor_id);
+END $$
+
+-- Perfil propio del usuario: apodo, avatar y fecha de nacimiento (para saludos de cumpleaños)
+DROP PROCEDURE IF EXISTS sp_user_profile_update $$
+CREATE PROCEDURE sp_user_profile_update(
+  IN p_user_id CHAR(36), IN p_ip VARCHAR(64), IN p_full_name VARCHAR(200), IN p_nickname VARCHAR(40), IN p_avatar VARCHAR(40), IN p_birth_date DATE)
+BEGIN
+  DECLARE v_tenant CHAR(36);
+  IF p_birth_date IS NOT NULL AND (p_birth_date > UTC_DATE() OR p_birth_date < '1900-01-01') THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:INVALID_BIRTH_DATE';
+  END IF;
+  UPDATE app_user SET full_name = p_full_name, nickname = NULLIF(TRIM(p_nickname), ''), avatar = NULLIF(TRIM(p_avatar), ''),
+         birth_date = p_birth_date, updated_by = p_user_id
+   WHERE id = p_user_id AND deleted_at IS NULL;
+  SELECT tenant_id INTO v_tenant FROM app_user WHERE id = p_user_id;
+  CALL sp_audit_log_add(v_tenant, p_user_id, 'app_user', p_user_id, 'PROFILE',
+       JSON_OBJECT('nickname', p_nickname, 'avatar', p_avatar), p_ip);
 END $$
 
 DELIMITER ;

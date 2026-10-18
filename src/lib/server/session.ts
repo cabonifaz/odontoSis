@@ -13,7 +13,8 @@ const TOUCH_EVERY_MS = 5 * 60 * 1000;
 
 type SessionRow = {
   session_id: string; expires_at: string; last_seen_at: string | null; mfa_verified: number;
-  user_id: string; email: string; full_name: string; tenant_id: string | null; must_change_password: number;
+  user_id: string; email: string; full_name: string; nickname: string | null; avatar: string | null; birth_date: string | null;
+  patient_form_mode: string | null; tenant_id: string | null; must_change_password: number;
   totp_enabled: number; role_code: string; role_name: string; permissions: string[] | string;
   permission_overrides: PermissionOverrides | string | null;
   tenant_name: string | null; tenant_code: string | null; primary_color: string | null; secondary_color: string | null;
@@ -72,6 +73,9 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
     userId: row.user_id,
     email: row.email,
     fullName: row.full_name,
+    nickname: row.nickname,
+    avatar: row.avatar,
+    birthDate: row.birth_date,
     roleCode: row.role_code,
     roleName: row.role_name,
     permissions,
@@ -93,6 +97,7 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
           currencyCode: row.currency_code ?? 'PEN',
           currencySymbol: row.currency_symbol ?? 'S/',
           budgetValidityDays: row.budget_validity_days ?? 15,
+          patientFormMode: row.patient_form_mode === 'ADVANCED' ? 'ADVANCED' : 'STANDARD',
           access: tenantAccess({
             status: row.tenant_status_code ?? 'ACTIVE',
             subscriptionStart: row.subscription_start, subscriptionEnd: row.subscription_end,

@@ -8,10 +8,11 @@ import { useApp } from '@/lib/client/app-context';
 import { formatDate } from '@/lib/shared/format';
 import { TenantLoginLink } from '@/components/tenant-login-link';
 import { BranchesTab } from '@/components/settings/branches-tab';
+import { PriceListsTab } from '@/components/settings/price-lists-tab';
 
 type Tenant = { trade_name: string; legal_name: string; tax_id: string | null; email: string | null; phone: string | null; address: string | null; budget_validity_days: number; budget_notes: string | null; primary_color: string; secondary_color: string; logo_file_id: string | null; plan_name: string; subscription_end: string | null };
 type Usage = { plan_name: string; max_users: number; active_users: number; max_patients: number | null; patients: number; max_storage_mb: number; storage_bytes: number; subscription_start: string | null; subscription_end: string | null; implementation_start: string | null; implementation_end: string | null; implementation_max_patients: number | null; status_code: string };
-type Tab = 'clinica' | 'sedes' | 'marca' | 'catalogos' | 'plan';
+type Tab = 'clinica' | 'sedes' | 'tarifarios' | 'marca' | 'catalogos' | 'plan';
 
 export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>('clinica');
@@ -21,11 +22,12 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader title="Configuración" subtitle="Datos de la clínica, marca y catálogos." />
-      <Tabs<Tab> value={tab} onChange={setTab} tabs={[{ value: 'clinica', label: 'Clínica' }, { value: 'sedes', label: 'Sedes' }, { value: 'marca', label: 'Marca' }, { value: 'catalogos', label: 'Catálogos' }, { value: 'plan', label: 'Plan' }]} />
+      <Tabs<Tab> value={tab} onChange={setTab} tabs={[{ value: 'clinica', label: 'Clínica' }, { value: 'sedes', label: 'Sedes' }, { value: 'tarifarios', label: 'Tarifarios' }, { value: 'marca', label: 'Marca' }, { value: 'catalogos', label: 'Catálogos' }, { value: 'plan', label: 'Plan' }]} />
       {!data ? <Spinner /> : (
         <>
           {tab === 'clinica' && <ClinicForm t={data.tenant} onSaved={load} />}
           {tab === 'sedes' && <BranchesTab readOnly />}
+          {tab === 'tarifarios' && <PriceListsTab />}
           {tab === 'marca' && <BrandingForm t={data.tenant} />}
           {tab === 'catalogos' && <Catalogs />}
           {tab === 'plan' && <PlanUsage u={data.usage} />}
@@ -139,7 +141,11 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
 }
 
 type MI = { id: string; table_code: string; code: string; name: string; value: string | null; sort_order: number; is_active: number; is_system: number; tenant_id: string | null };
-const EDITABLE = [{ code: 'SPECIALTY', name: 'Especialidades' }, { code: 'SERVICE_CATEGORY', name: 'Categorías de servicio' }];
+const EDITABLE = [
+  { code: 'SPECIALTY', name: 'Especialidades' }, { code: 'SERVICE_CATEGORY', name: 'Categorías de servicio' },
+  { code: 'ACQUISITION_SOURCE', name: 'Captación' }, { code: 'ATTENTION_TYPE', name: 'Tipos de atención' },
+  { code: 'PATIENT_FILE_TYPE', name: 'Tipos de archivo' },
+];
 
 function Catalogs() {
   const toast = useToast();
@@ -166,7 +172,7 @@ function Catalogs() {
   return (
     <Card className="max-w-3xl">
       <div className="flex flex-col gap-3 border-b border-line p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {EDITABLE.map((t) => <Button key={t.code} size="sm" variant={table === t.code ? 'primary' : 'secondary'} onClick={() => setTable(t.code)}>{t.name}</Button>)}
         </div>
         <Button size="sm" icon={<Plus className="size-4" />} onClick={() => setForm({ id: crypto.randomUUID(), code: '', name: '', sortOrder: '100', isActive: true })}>Agregar</Button>

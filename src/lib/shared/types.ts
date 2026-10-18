@@ -10,6 +10,8 @@ export type TenantBranding = {
   currencyCode: string;
   currencySymbol: string;
   budgetValidityDays: number;
+  /** Ficha de paciente de la clínica (cada sede puede sobrescribirla) */
+  patientFormMode: 'STANDARD' | 'ADVANCED';
   /** Fase de acceso calculada (ver tenantAccess) */
   access: TenantAccess;
 };
@@ -55,6 +57,9 @@ export type SessionUser = {
   userId: string;
   email: string;
   fullName: string;
+  nickname: string | null;
+  avatar: string | null;
+  birthDate: string | null;
   roleCode: string;
   roleName: string;
   permissions: string[];
@@ -67,7 +72,7 @@ export type SessionUser = {
 };
 
 /** Datos de sesión seguros para enviar al cliente. */
-export type ClientSession = Pick<SessionUser, 'userId' | 'email' | 'fullName' | 'roleCode' | 'roleName' | 'permissions' | 'isPlatform' | 'doctorId' | 'tenant'>;
+export type ClientSession = Pick<SessionUser, 'userId' | 'email' | 'fullName' | 'nickname' | 'avatar' | 'birthDate' | 'roleCode' | 'roleName' | 'permissions' | 'isPlatform' | 'doctorId' | 'tenant'>;
 
 export type MasterItem = {
   id: string;

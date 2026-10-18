@@ -1,14 +1,14 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { MapPin, Pencil, Plus, Trash2 } from 'lucide-react';
-import { Badge, Button, Card, Checkbox, Input, Modal, Spinner } from '@/components/ui';
+import { Badge, Button, Card, Checkbox, Input, Modal, Select, Spinner } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { api, ApiError, fieldErrors } from '@/lib/client/api';
 import { useApp } from '@/lib/client/app-context';
 
-type Branch = { id: string; code: string; name: string; address: string | null; phone: string | null; is_main: number; is_active: number };
+type Branch = { id: string; code: string; name: string; address: string | null; phone: string | null; is_main: number; is_active: number; patient_form_mode: string | null };
 type Usage = { plan_name: string; max_branches: number; active_branches: number };
-type Form = { id: string; code: string; name: string; address: string; phone: string; isMain: boolean; isActive: boolean; isNew: boolean };
+type Form = { id: string; code: string; name: string; address: string; phone: string; isMain: boolean; isActive: boolean; patientFormMode: string; isNew: boolean };
 
 /**
  * Sedes (locales) de la clínica. Las habilita el super admin (límite del plan o de la clínica).
@@ -33,7 +33,7 @@ export function BranchesTab({ endpoint = '/api/branches', readOnly = false }: { 
     setSaving(true);
     try {
       const { isNew: _n, ...body } = form;
-      await api(endpoint, { body });
+      await api(endpoint, { body: { ...body, patientFormMode: body.patientFormMode || null } });
       toast.success('Sede guardada.');
       setForm(null); load(); void syncNow();
     } catch (e) {
@@ -59,7 +59,7 @@ export function BranchesTab({ endpoint = '/api/branches', readOnly = false }: { 
             : full && <p className="text-xs text-muted">Límite alcanzado. Amplía el máximo de sedes de la clínica (Datos) o cambia su plan.</p>}
         </div>
         {!readOnly && <Button size="sm" icon={<Plus className="size-4" />} disabled={full} title={full ? 'Límite de sedes del plan alcanzado' : undefined}
-          onClick={() => { setErrors({}); setForm({ id: crypto.randomUUID(), code: '', name: '', address: '', phone: '', isMain: false, isActive: true, isNew: true }); }}>
+          onClick={() => { setErrors({}); setForm({ id: crypto.randomUUID(), code: '', name: '', address: '', phone: '', isMain: false, isActive: true, patientFormMode: '', isNew: true }); }}>
           Nueva sede
         </Button>}
       </div>
@@ -69,11 +69,11 @@ export function BranchesTab({ endpoint = '/api/branches', readOnly = false }: { 
             <MapPin className="size-4 shrink-0 text-brand" />
             <div className="min-w-0 flex-1">
               <p className="font-medium">{b.name} <span className="font-mono text-xs text-muted">{b.code}</span></p>
-              <p className="truncate text-sm text-muted">{[b.address, b.phone].filter(Boolean).join(' · ') || 'Sin dirección'}</p>
+              <p className="truncate text-sm text-muted">{[b.address, b.phone].filter(Boolean).join(' · ') || 'Sin dirección'}{b.patient_form_mode ? ` · Ficha ${b.patient_form_mode === 'ADVANCED' ? 'avanzada' : 'estándar'}` : ''}</p>
             </div>
             {!!b.is_main && <Badge color="var(--brand)">Principal</Badge>}
             {!b.is_active && <Badge>Inactiva</Badge>}
-            {!readOnly && <Button size="sm" variant="ghost" aria-label="Editar" onClick={() => { setErrors({}); setForm({ id: b.id, code: b.code, name: b.name, address: b.address ?? '', phone: b.phone ?? '', isMain: !!b.is_main, isActive: !!b.is_active, isNew: false }); }}><Pencil className="size-4" /></Button>}
+            {!readOnly && <Button size="sm" variant="ghost" aria-label="Editar" onClick={() => { setErrors({}); setForm({ id: b.id, code: b.code, name: b.name, address: b.address ?? '', phone: b.phone ?? '', isMain: !!b.is_main, isActive: !!b.is_active, patientFormMode: b.patient_form_mode ?? '', isNew: false }); }}><Pencil className="size-4" /></Button>}
             {!readOnly && !b.is_main && <Button size="sm" variant="ghost" aria-label="Eliminar" className="text-danger" onClick={() => setDel(b)}><Trash2 className="size-4" /></Button>}
           </li>
         ))}
@@ -86,6 +86,8 @@ export function BranchesTab({ endpoint = '/api/branches', readOnly = false }: { 
             <Input label="Código" required value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} error={errors.code} placeholder="MAYOLO" />
             <Input label="Dirección" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="sm:col-span-2" />
             <Input label="Teléfono" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <Select label="Ficha de paciente" value={form.patientFormMode} onChange={(e) => setForm({ ...form, patientFormMode: e.target.value })}
+              placeholder="La de la clínica" options={[{ value: 'STANDARD', label: 'Estándar' }, { value: 'ADVANCED', label: 'Avanzada' }]} />
             <div className="flex flex-col justify-end gap-2">
               <Checkbox label="Sede principal" checked={form.isMain} onChange={(v) => setForm({ ...form, isMain: v, isActive: v ? true : form.isActive })} />
               {!form.isMain && <Checkbox label="Activa" checked={form.isActive} onChange={(v) => setForm({ ...form, isActive: v })} />}

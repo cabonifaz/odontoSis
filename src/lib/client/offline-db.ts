@@ -8,11 +8,15 @@ import type { SyncOp } from '@/lib/shared/schemas';
  */
 export type LPatient = { id: string; record_number: string | null; first_name: string; last_name: string; birth_date: string | null; phone: string | null; insurance_company: string | null; deductible: number | null; coinsurance_pct: number | null; is_active: number; updated_at: string; pending?: boolean;
   requires_guardian?: number; guardian_name?: string | null; guardian_relationship_name?: string | null; guardian_phone?: string | null;
-  agreement_id?: string | null; agreement_member_code?: string | null };
+  agreement_id?: string | null; agreement_member_code?: string | null;
+  mother_last_name?: string | null; home_branch_id?: string | null; assigned_doctor_id?: string | null; price_list_id?: string | null;
+  titular_patient_id?: string | null };
+export type LPriceList = { id: string; code: string; name: string; group_name: string | null; branch_id: string | null; is_default: number; is_active: number; updated_at: string };
+export type LPriceListItem = { id: string; price_list_id: string; service_id: string; price: number; updated_at: string };
 export type LAgreement = { id: string; code: string; name: string; company_name: string | null; discount_pct: number; valid_from: string | null; valid_to: string | null; requires_member_code: number; is_active: number; updated_at: string };
 export type LDoctor = { id: string; first_name: string; last_name: string; specialty_id: string | null; agenda_color: string; is_active: number; updated_at: string };
 export type LService = { id: string; code: string; name: string; category_id: string | null; currency_symbol: string; price: number; requires_lab: number; per_piece: number; is_active: number; updated_at: string };
-export type LBranch = { id: string; code: string; name: string; address: string | null; phone: string | null; is_main: number; is_active: number; updated_at: string };
+export type LBranch = { id: string; code: string; name: string; address: string | null; phone: string | null; is_main: number; is_active: number; patient_form_mode?: string | null; updated_at: string };
 export type LAppointment = { id: string; patient_id: string; doctor_id: string; branch_id?: string | null; start_at: string; end_at: string; status_code: string; reason: string | null; notes?: string | null; updated_at: string; pending?: boolean };
 export type LBudget = { id: string; budget_number: string | null; patient_id: string; doctor_id: string | null; branch_id?: string | null; budget_date: string; valid_until: string | null; status_code: string; total: number; updated_at: string; pending?: boolean };
 export type LMaster = { id: string; table_code: string; code: string; name: string; value: string | null; sort_order: number; is_active: number; updated_at: string };
@@ -28,6 +32,8 @@ class OfflineDb extends Dexie {
   masters!: EntityTable<LMaster, 'id'>;
   agreements!: EntityTable<LAgreement, 'id'>;
   branches!: EntityTable<LBranch, 'id'>;
+  priceLists!: EntityTable<LPriceList, 'id'>;
+  priceListItems!: EntityTable<LPriceListItem, 'id'>;
   outbox!: EntityTable<LOutbox, 'opId'>;
   meta!: EntityTable<LMeta, 'key'>;
 
@@ -47,6 +53,9 @@ class OfflineDb extends Dexie {
     this.version(2).stores({ agreements: 'id, name' }).upgrade((tx) => tx.table('meta').delete('lastSync'));
     // v3: sedes (se fuerza sincronización completa para traer branch_id de citas y presupuestos)
     this.version(3).stores({ branches: 'id, name' }).upgrade((tx) => tx.table('meta').delete('lastSync'));
+    // v4: tarifarios + campos de la ficha avanzada
+    this.version(4).stores({ priceLists: 'id, name', priceListItems: 'id, price_list_id, [price_list_id+service_id]' })
+      .upgrade((tx) => tx.table('meta').delete('lastSync'));
   }
 }
 

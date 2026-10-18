@@ -104,7 +104,8 @@ BEGIN
 END $$
 
 -- Sincronización offline: devuelve lo cambiado desde p_since (incluye borrados lógicos)
--- Result sets: 1 server_time, 2 master_items, 3 doctors, 4 services, 5 patients, 6 appointments, 7 budgets, 8 agreements, 9 branches
+-- Result sets: 1 server_time, 2 master_items, 3 doctors, 4 services, 5 patients, 6 appointments, 7 budgets, 8 agreements,
+--              9 branches, 10 price_lists, 11 price_list_items
 DROP PROCEDURE IF EXISTS sp_sync_pull $$
 CREATE PROCEDURE sp_sync_pull(IN p_tenant_id CHAR(36), IN p_since DATETIME(3))
 BEGIN
@@ -113,7 +114,8 @@ BEGIN
 
   SELECT mi.id, mt.code AS table_code, mi.code, mi.name, mi.value, mi.sort_order, mi.is_active, mi.deleted_at, mi.updated_at
     FROM master_item mi JOIN master_table mt ON mt.id = mi.master_table_id
-   WHERE (mi.tenant_id IS NULL OR mi.tenant_id = p_tenant_id) AND mi.updated_at > v_since;
+   WHERE (mi.tenant_id IS NULL OR mi.tenant_id = p_tenant_id) AND mi.updated_at > v_since
+     AND mt.code NOT IN ('UBIGEO_DEPARTMENT', 'UBIGEO_PROVINCE', 'UBIGEO_DISTRICT');
 
   SELECT id, first_name, last_name, specialty_id, agenda_color, is_active, deleted_at, updated_at
     FROM doctor WHERE tenant_id = p_tenant_id AND updated_at > v_since;
@@ -126,7 +128,8 @@ BEGIN
   -- Datos mínimos de pacientes para trabajar offline (sin historia clínica)
   SELECT p.id, p.record_number, p.first_name, p.last_name, p.birth_date, p.phone_enc, p.insurance_company, p.deductible,
          p.coinsurance_pct, p.requires_guardian, p.guardian_name, gr.name AS guardian_relationship_name, p.guardian_phone_enc,
-         p.agreement_id, p.agreement_member_code,
+         p.agreement_id, p.agreement_member_code, p.mother_last_name, p.mobile_enc, p.home_branch_id, p.assigned_doctor_id,
+         p.price_list_id, p.titular_patient_id,
          p.is_active, p.deleted_at, p.updated_at
     FROM patient p LEFT JOIN master_item gr ON gr.id = p.guardian_relationship_id
    WHERE p.tenant_id = p_tenant_id AND p.updated_at > v_since;
@@ -144,8 +147,14 @@ BEGIN
   SELECT id, code, name, company_name, discount_pct, valid_from, valid_to, requires_member_code, is_active, deleted_at, updated_at
     FROM agreement WHERE tenant_id = p_tenant_id AND updated_at > v_since;
 
-  SELECT id, code, name, address, phone, is_main, is_active, deleted_at, updated_at
+  SELECT id, code, name, address, phone, is_main, is_active, patient_form_mode, deleted_at, updated_at
     FROM branch WHERE tenant_id = p_tenant_id AND updated_at > v_since;
+
+  SELECT id, code, name, group_name, branch_id, is_default, is_active, deleted_at, updated_at
+    FROM price_list WHERE tenant_id = p_tenant_id AND updated_at > v_since;
+
+  SELECT id, price_list_id, service_id, price, deleted_at, updated_at
+    FROM price_list_item WHERE tenant_id = p_tenant_id AND updated_at > v_since;
 END $$
 
 DELIMITER ;

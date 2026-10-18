@@ -36,7 +36,7 @@ export async function createTenant(a: Actor, t: z.infer<typeof tenantCreateSchem
 export const updateTenant = (a: Actor, id: string, t: z.infer<typeof tenantUpdateSchema>) =>
   callSp('sp_tenant_update', [a.userId, a.ip, id, t.legalName, t.tradeName, t.taxId, t.email, t.phone, t.address, t.planId,
     t.statusCode, t.maxUsersOverride, t.currencyCode, t.timezone, t.implementationStart, t.implementationEnd, t.implementationMaxPatients,
-    t.maxBranchesOverride ?? null]);
+    t.maxBranchesOverride ?? null, t.patientFormMode ?? null]);
 
 export const setBranding = (a: Actor, tenantId: string, b: z.infer<typeof brandingSchema>) =>
   callSp('sp_tenant_branding_set', [a.userId, a.ip, tenantId, b.primaryColor, b.secondaryColor, b.logoFileId, b.clearLogo]);

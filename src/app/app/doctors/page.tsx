@@ -5,10 +5,11 @@ import { Badge, Button, Card, Checkbox, EmptyState, Input, Modal, PageHeader, Se
 import { useToast } from '@/components/ui/toast';
 import { useApp, useMasters, can } from '@/lib/client/app-context';
 import { api, ApiError, fieldErrors } from '@/lib/client/api';
+import { DocumentNumberInput } from '@/components/dni-lookup';
 
-type Doc = { id: string; user_id: string | null; user_email: string | null; first_name: string; last_name: string; license_number: string | null; specialty_id: string | null; specialty_name: string | null; email: string | null; phone: string | null; agenda_color: string; is_active: number };
+type Doc = { id: string; user_id: string | null; user_email: string | null; first_name: string; last_name: string; license_number: string | null; specialty_id: string | null; specialty_name: string | null; email: string | null; phone: string | null; agenda_color: string; is_active: number; birth_date: string | null };
 type U = { id: string; full_name: string; email: string; role_code: string; doctor_id: string | null };
-type Form = { id: string; userId: string; firstName: string; lastName: string; licenseNumber: string; specialtyId: string; email: string; phone: string; agendaColor: string; isActive: boolean };
+type Form = { id: string; userId: string; firstName: string; lastName: string; licenseNumber: string; specialtyId: string; email: string; phone: string; agendaColor: string; isActive: boolean; birthDate: string; dni: string };
 
 export default function DoctorsPage() {
   const { session, syncNow } = useApp();
@@ -30,15 +31,15 @@ export default function DoctorsPage() {
 
   const open = (d?: Doc) => {
     setErrors({});
-    setForm(d ? { id: d.id, userId: d.user_id ?? '', firstName: d.first_name, lastName: d.last_name, licenseNumber: d.license_number ?? '', specialtyId: d.specialty_id ?? '', email: d.email ?? '', phone: d.phone ?? '', agendaColor: d.agenda_color, isActive: !!d.is_active }
-      : { id: crypto.randomUUID(), userId: '', firstName: '', lastName: '', licenseNumber: '', specialtyId: '', email: '', phone: '', agendaColor: '#0E7490', isActive: true });
+    setForm(d ? { id: d.id, userId: d.user_id ?? '', firstName: d.first_name, lastName: d.last_name, licenseNumber: d.license_number ?? '', specialtyId: d.specialty_id ?? '', email: d.email ?? '', phone: d.phone ?? '', agendaColor: d.agenda_color, isActive: !!d.is_active, birthDate: d.birth_date?.slice(0, 10) ?? '', dni: '' }
+      : { id: crypto.randomUUID(), userId: '', firstName: '', lastName: '', licenseNumber: '', specialtyId: '', email: '', phone: '', agendaColor: '#0E7490', isActive: true, birthDate: '', dni: '' });
   };
 
   async function save() {
     if (!form) return;
     setSaving(true);
     try {
-      await api('/api/doctors', { body: { ...form, userId: form.userId || null, specialtyId: form.specialtyId || null } });
+      await api('/api/doctors', { body: { ...form, birthDate: form.birthDate || null, userId: form.userId || null, specialtyId: form.specialtyId || null } });
       toast.success('Doctor guardado.');
       setForm(null);
       load();
@@ -94,6 +95,9 @@ export default function DoctorsPage() {
         footer={<><Button variant="secondary" onClick={() => setForm(null)}>Cancelar</Button><Button onClick={save} loading={saving}>Guardar</Button></>}>
         {form && (
           <div className="grid gap-4 sm:grid-cols-2">
+            <DocumentNumberInput label="DNI (para traer el nombre de RENIEC)" isDni value={form.dni} onChange={(x) => setForm({ ...form, dni: x })}
+              onFound={(r) => setForm({ ...form, firstName: r.firstName, lastName: [r.lastName, r.motherLastName].filter(Boolean).join(' ') })} />
+            <Input label="Fecha de nacimiento" type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} hint="Para el saludo de cumpleaños 🎂" />
             <Input label="Nombres" required value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} error={errors.firstName} />
             <Input label="Apellidos" required value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} error={errors.lastName} />
             <Input label="N° COP" value={form.licenseNumber} onChange={(e) => setForm({ ...form, licenseNumber: e.target.value })} />

@@ -22,7 +22,7 @@ import { formatDate, formatDateTime, formatMoney, todayIn } from '@/lib/shared/f
 type Tenant = {
   id: string; code: string; legal_name: string; trade_name: string; tax_id: string | null; email: string | null;
   phone: string | null; address: string | null; plan_id: string; plan_name: string; plan_max_users: number;
-  max_users_override: number | null; max_users: number; max_branches_override: number | null; plan_max_branches: number; status_code: string; status_name: string; status_color: string | null;
+  max_users_override: number | null; max_users: number; max_branches_override: number | null; plan_max_branches: number; patient_form_mode: string | null; status_code: string; status_name: string; status_color: string | null;
   primary_color: string; secondary_color: string; logo_file_id: string | null; currency_code: string; timezone: string;
   subscription_start: string | null; subscription_end: string | null; active_users: number; patient_count: number;
   implementation_start: string | null; implementation_end: string | null; implementation_max_patients: number | null;
@@ -146,6 +146,7 @@ function DataTab({ tenant, plans, onSaved }: { tenant: Tenant; plans: Plan[]; on
     phone: tenant.phone ?? '', address: tenant.address ?? '', planId: tenant.plan_id, statusCode: tenant.status_code,
     maxUsersOverride: tenant.max_users_override != null ? String(tenant.max_users_override) : '',
     maxBranchesOverride: tenant.max_branches_override != null ? String(tenant.max_branches_override) : '',
+    patientFormMode: tenant.patient_form_mode === 'ADVANCED' ? 'ADVANCED' : 'STANDARD',
     currencyCode: tenant.currency_code, timezone: tenant.timezone || 'America/Lima',
     implementationStart: d10(tenant.implementation_start), implementationEnd: d10(tenant.implementation_end),
     implementationMaxPatients: tenant.implementation_max_patients != null ? String(tenant.implementation_max_patients) : '',
@@ -201,6 +202,9 @@ function DataTab({ tenant, plans, onSaved }: { tenant: Tenant; plans: Plan[]; on
           <Input label="Máximo de usuarios (opcional)" type="number" min={1} max={1000} value={f.maxUsersOverride}
             onChange={on('maxUsersOverride')} error={errors.maxUsersOverride}
             hint={`Vacío = límite del plan${plan ? ` (${plan.max_users})` : ''}`} />
+          <Select label="Ficha de paciente" value={f.patientFormMode} onChange={on('patientFormMode')}
+            options={[{ value: 'STANDARD', label: 'Estándar (clínica de baja demanda)' }, { value: 'ADVANCED', label: 'Avanzada (clínica grande)' }]}
+            hint="Cada sede puede sobrescribirla en la pestaña Sedes" />
           <Input label="Máximo de sedes (opcional)" type="number" min={1} max={500} value={f.maxBranchesOverride}
             onChange={on('maxBranchesOverride')} error={errors.maxBranchesOverride}
             hint={`Vacío = sedes del plan (${tenant.plan_max_branches ?? 1}). Las sedes se habilitan en la pestaña Sedes.`} />

@@ -6,6 +6,8 @@ import { Badge, Button, Card, EmptyState, PageHeader, Spinner, Stat } from '@/co
 import { useApp, can } from '@/lib/client/app-context';
 import { api, ApiError } from '@/lib/client/api';
 import { formatMoney, formatTime } from '@/lib/shared/format';
+import { displayName } from '@/components/avatar';
+import { BirthdaysCard } from '@/components/dashboard/birthdays-card';
 
 type Dash = {
   kpis: { patients_total: number; appointments_today: number; budgets_pending: number; approved_this_month: number };
@@ -28,7 +30,7 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader
-        title={`${greet}, ${session.fullName.split(' ')[0]}`}
+        title={`${greet}, ${displayName(session)}`}
         subtitle={new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: t.timezone })}
         actions={<>
           {can(session, 'appointments.write') && <Link href="/app/agenda?new=1"><Button variant="secondary" icon={<CalendarDays className="size-4" />}>Nueva cita</Button></Link>}
@@ -45,6 +47,7 @@ export default function DashboardPage() {
             <Stat label="Presupuestos pendientes" value={data.kpis.budgets_pending} icon={<ClipboardList className="size-5" />} />
             <Stat label="Aprobado este mes" value={formatMoney(data.kpis.approved_this_month, t.currencySymbol)} icon={<Wallet className="size-5" />} />
           </div>
+          <BirthdaysCard />
           <Card className="mt-6">
             <div className="flex items-center justify-between border-b border-line px-5 py-4">
               <h2 className="font-semibold">Agenda de hoy</h2>

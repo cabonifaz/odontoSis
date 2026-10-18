@@ -94,8 +94,8 @@ export function PatientPicker({ value, onChange, label = 'Paciente', required, e
   const items = excludeIds?.length ? all.filter((p) => !excludeIds.includes(p.id)) : all;
   return (
     <Combo label={label} items={items} value={value} onChange={onChange} required={required} error={error} placeholder="Buscar paciente por nombre o H.C."
-      text={(p) => `${p.last_name} ${p.first_name} ${p.first_name} ${p.last_name} ${p.record_number ?? ''}`}
-      render={(p) => <span><span className="font-medium">{p.last_name}, {p.first_name}</span> <span className="text-xs text-muted">H.C. {p.record_number ?? 'pendiente'}</span></span>} />
+      text={(p) => `${p.last_name} ${p.mother_last_name ?? ''} ${p.first_name} ${p.first_name} ${p.last_name} ${p.record_number ?? ''}`}
+      render={(p) => <span><span className="font-medium">{[p.last_name, p.mother_last_name].filter(Boolean).join(' ')}, {p.first_name}</span> <span className="text-xs text-muted">H.C. {p.record_number ?? 'pendiente'}</span></span>} />
   );
 }
 

@@ -44,6 +44,7 @@ BEGIN
          b.insurance_company, b.deductible, b.coinsurance_pct, b.subtotal, b.discount, b.total, b.notes,
          b.agreement_id, b.agreement_name, b.agreement_discount_pct, p.agreement_member_code,
          b.branch_id, br.name AS branch_name, br.address AS branch_address, br.phone AS branch_phone,
+         b.price_list_id, b.price_list_name, p.mother_last_name AS patient_mother_last_name,
          b.created_at, b.updated_at,
          (SELECT o.id FROM odontogram o WHERE o.budget_id = b.id AND o.deleted_at IS NULL LIMIT 1) AS odontogram_id,
          t.trade_name AS tenant_name, t.legal_name AS tenant_legal_name, t.tax_id AS tenant_tax_id,
@@ -105,7 +106,8 @@ CREATE PROCEDURE sp_budget_save(
   IN p_tenant_id CHAR(36), IN p_actor_id CHAR(36), IN p_ip VARCHAR(64), IN p_id CHAR(36), IN p_patient_id CHAR(36),
   IN p_doctor_id CHAR(36), IN p_budget_date DATE, IN p_status_code VARCHAR(60), IN p_insurance VARCHAR(150),
   IN p_deductible DECIMAL(12,2), IN p_coinsurance_pct DECIMAL(5,2), IN p_discount DECIMAL(12,2), IN p_notes TEXT,
-  IN p_items JSON, IN p_marks JSON, IN p_agreement_id CHAR(36), IN p_can_edit TINYINT, IN p_branch_id CHAR(36))
+  IN p_items JSON, IN p_marks JSON, IN p_agreement_id CHAR(36), IN p_can_edit TINYINT, IN p_branch_id CHAR(36),
+  IN p_price_list_id CHAR(36))
 BEGIN
   DECLARE v_owner CHAR(36) DEFAULT NULL; DECLARE v_status CHAR(36); DECLARE v_cur CHAR(36); DECLARE v_days INT;
   DECLARE v_ag_pct DECIMAL(5,2) DEFAULT 0; DECLARE v_ag_name VARCHAR(150) DEFAULT NULL; DECLARE v_branch CHAR(36);
@@ -124,6 +126,10 @@ BEGIN
   -- Convenio vigente a la fecha del presupuesto (el % se guarda como copia)
   CALL sp__agreement_for_date(p_tenant_id, p_agreement_id, p_budget_date, v_ag_pct, v_ag_name);
   CALL sp__branch_resolve(p_tenant_id, p_branch_id, v_branch);
+  IF p_price_list_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM price_list WHERE id = p_price_list_id AND tenant_id = p_tenant_id AND deleted_at IS NULL) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:PRICE_LIST_NOT_FOUND';
+  END IF;
   -- Los servicios referenciados deben ser del tenant
   IF EXISTS (
       SELECT 1 FROM JSON_TABLE(p_items, '$[*]' COLUMNS (service_id CHAR(36) COLLATE utf8mb4_0900_ai_ci PATH '$.serviceId')) jt
@@ -188,6 +194,8 @@ BEGIN
          deductible = VALUES(deductible), coinsurance = VALUES(coinsurance), total = VALUES(total),
          sort_order = VALUES(sort_order), deleted_at = NULL, deleted_by = NULL, updated_by = p_actor_id;
 
+  UPDATE budget SET price_list_id = p_price_list_id,
+         price_list_name = (SELECT name FROM price_list WHERE id = p_price_list_id) WHERE id = p_id;
   SELECT COALESCE(SUM(total), 0) INTO v_subtotal FROM budget_item WHERE budget_id = p_id AND deleted_at IS NULL;
   UPDATE budget SET subtotal = v_subtotal, total = GREATEST(v_subtotal - discount, 0) WHERE id = p_id;
 

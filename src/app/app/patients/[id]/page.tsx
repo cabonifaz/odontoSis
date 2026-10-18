@@ -6,15 +6,26 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { CalendarPlus, ClipboardPlus, CloudOff, Lock, Pencil, Trash2 } from 'lucide-react';
 import { Badge, Button, Card, EmptyState, Modal, PageHeader, Spinner, Tabs } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
-import { useApp, useMasters, can } from '@/lib/client/app-context';
+import { useApp, useFormMode, useMasters, can } from '@/lib/client/app-context';
+import { PatientFilesTab } from '@/components/patients/patient-files-tab';
+import { ReferralsTab } from '@/components/patients/referrals-tab';
+import { GuaranteeLettersTab } from '@/components/patients/guarantee-letters-tab';
+import { OrthoBudgetsTab } from '@/components/patients/ortho-budgets-tab';
+import { DependentsTab } from '@/components/patients/dependents-tab';
 import { api, ApiError } from '@/lib/client/api';
 import { PatientForm, type PatientFormValue } from '@/components/patients/patient-form';
 import { Odontogram, OdontogramLegend, toConditions, type Mark } from '@/components/odontogram/odontogram';
 import { ConditionPalette, toggleMark } from '@/components/odontogram/condition-palette';
 import { ageFrom, formatDate, formatDateTime, formatMoney } from '@/lib/shared/format';
 
-type Full = PatientFormValue & { recordNumber: string; createdAt: string; updatedAt: string; guardianRelationshipName: string | null; guardianDocTypeCode: string | null; agreementName: string | null; agreementDiscountPct: number | null };
-type Tab = 'datos' | 'odontograma' | 'presupuestos' | 'citas';
+type Full = PatientFormValue & {
+  recordNumber: string; createdAt: string; updatedAt: string; guardianRelationshipName: string | null; guardianDocTypeCode: string | null;
+  agreementName: string | null; agreementDiscountPct: number | null;
+  districtName: string | null; provinceName: string | null; departmentName: string | null; homeBranchName: string | null;
+  assignedDoctorName: string | null; attentionTypeName: string | null; priceListName: string | null; priceListGroup: string | null;
+  titularName: string | null; titularRecordNumber: string | null; titularRelationshipName: string | null;
+};
+type Tab = 'datos' | 'dependientes' | 'derivaciones' | 'citas' | 'archivos' | 'odontograma' | 'presupuestos' | 'ortodoncia' | 'garantias';
 
 export default function PatientDetail() {
   const { id } = useParams<{ id: string }>();
@@ -28,6 +39,9 @@ export default function PatientDetail() {
   const [confirmDel, setConfirmDel] = useState(false);
   const local = useLiveQuery(async () => db?.patients.get(id), [db, id]);
   const writable = can(session, 'patients.write');
+  const mode = useFormMode(local?.home_branch_id ?? null);
+  const maritalStatuses = useMasters('MARITAL_STATUS');
+  const acquisitionSources = useMasters('ACQUISITION_SOURCE');
 
   const load = useCallback(() => {
     api<Full>(`/api/patients/${id}`).then((p) => { setFull(p); setOffline(false); })
@@ -35,7 +49,8 @@ export default function PatientDetail() {
   }, [id]);
   useEffect(load, [load]);
 
-  const name = full ? `${full.firstName} ${full.lastName}` : local ? `${local.first_name} ${local.last_name}` : '';
+  const name = full ? [full.firstName, full.lastName, full.motherLastName].filter(Boolean).join(' ')
+    : local ? [local.first_name, local.last_name, local.mother_last_name].filter(Boolean).join(' ') : '';
   if (!full && !local) return offline ? <Card><EmptyState icon={<CloudOff className="size-6" />} title="Paciente no disponible sin conexión" /></Card> : <Spinner />;
 
   async function remove() {
@@ -65,9 +80,16 @@ export default function PatientDetail() {
           {can(session, 'budgets.write') && <Link href={`/app/budgets/new?patientId=${id}`}><Button icon={<ClipboardPlus className="size-4" />}>Presupuesto</Button></Link>}
         </>}
       />
-      <Tabs<Tab> value={tab} onChange={setTab} tabs={[
+      <Tabs<Tab> value={tab} onChange={setTab} tabs={mode === 'ADVANCED' ? [
+        { value: 'datos', label: 'Datos personales' }, { value: 'dependientes', label: 'Dependientes' },
+        { value: 'derivaciones', label: 'Derivaciones' }, { value: 'citas', label: 'Citas' },
+        { value: 'archivos', label: 'Imágenes y archivos' }, { value: 'odontograma', label: 'Odontograma' },
+        { value: 'presupuestos', label: 'Presupuestos operatorias' }, { value: 'ortodoncia', label: 'Presupuestos de ortodoncia' },
+        { value: 'garantias', label: 'Carta de garantía' },
+      ] : [
         { value: 'datos', label: 'Datos' }, { value: 'odontograma', label: 'Odontograma' },
         { value: 'presupuestos', label: 'Presupuestos' }, { value: 'citas', label: 'Citas' },
+        { value: 'archivos', label: 'Imágenes y archivos' },
       ]} />
 
       {tab === 'datos' && (
@@ -80,6 +102,21 @@ export default function PatientDetail() {
             <>
               <dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
                 <Item k="Documento" v={full.docNumber} />
+                {full.homeBranchName && <Item k="Sede" v={full.homeBranchName} />}
+                {mode === 'ADVANCED' && (
+                  <>
+                    <Item k="Celular" v={full.mobile} />
+                    <Item k="Mensajería" v={full.messaging} />
+                    <Item k="Estado civil" v={maritalStatuses.find((m) => m.id === full.maritalStatusId)?.name} />
+                    <Item k="Captación" v={acquisitionSources.find((m) => m.id === full.acquisitionSourceId)?.name} />
+                    <Item k="N° de carnet" v={full.cardNumber} />
+                    <Item k="Ubigeo" v={[full.departmentName, full.provinceName, full.districtName].filter(Boolean).join(' / ') || null} />
+                    <Item k="Doctor asignado" v={full.assignedDoctorName} />
+                    <Item k="Asignación" v={full.attentionTypeName} />
+                    <Item k="Plan (tarifario)" v={full.priceListName ? `${full.priceListGroup ? `${full.priceListGroup} · ` : ''}${full.priceListName}` : null} />
+                    {full.titularName && <Item k="Titular" v={`${full.titularName} (H.C. ${full.titularRecordNumber})${full.titularRelationshipName ? ` · ${full.titularRelationshipName}` : ''}`} />}
+                  </>
+                )}
                 <Item k="Fecha de nacimiento" v={full.birthDate ? formatDate(full.birthDate) : null} />
                 <Item k="Teléfono" v={full.phone} />
                 <Item k="Correo" v={full.email} />
@@ -115,6 +152,11 @@ export default function PatientDetail() {
       {tab === 'odontograma' && <PatientOdontogram patientId={id} writable={writable} />}
       {tab === 'presupuestos' && <PatientBudgets patientId={id} />}
       {tab === 'citas' && <PatientAppointments patientId={id} />}
+      {tab === 'archivos' && <PatientFilesTab patientId={id} writable={writable} />}
+      {tab === 'dependientes' && <DependentsTab patientId={id} />}
+      {tab === 'derivaciones' && <ReferralsTab patientId={id} writable={writable} />}
+      {tab === 'ortodoncia' && <OrthoBudgetsTab patientId={id} />}
+      {tab === 'garantias' && <GuaranteeLettersTab patientId={id} writable={writable} />}
 
       <Modal open={confirmDel} onClose={() => setConfirmDel(false)} title="Eliminar paciente" size="sm"
         footer={<><Button variant="secondary" onClick={() => setConfirmDel(false)}>Cancelar</Button><Button variant="danger" onClick={remove}>Eliminar</Button></>}>

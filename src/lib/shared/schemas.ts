@@ -55,6 +55,8 @@ const tenantBase = z.object({
   timezone: text(64).default('America/Lima').refine((tz) => { try { new Intl.DateTimeFormat('en', { timeZone: tz }); return true; } catch { return false; } }, 'Zona horaria inválida'),
   /** Sedes activas permitidas para esta clínica (vacío = las del plan) */
   maxBranchesOverride: z.coerce.number().int().min(1).max(500).nullish().or(z.literal('').transform(() => null)),
+  /** Ficha de paciente estándar (clínica pequeña) o avanzada (clínica grande). La define el super admin */
+  patientFormMode: z.enum(['STANDARD', 'ADVANCED']).default('STANDARD'),
   // Periodo de implementación (entrenamiento, carga de datos, pruebas) y su límite de pacientes
   implementationStart: optDate,
   implementationEnd: optDate,
@@ -199,6 +201,7 @@ export const doctorSchema = z.object({
   email: z.string().trim().email().max(200).nullish().or(z.literal('').transform(() => null)),
   phone: optText(40),
   agendaColor: hex.default('#0E7490'),
+  birthDate: optDate,
   isActive: z.boolean().default(true),
 });
 
@@ -233,6 +236,31 @@ export const patientSchema = z.object({
   /** Convenio escrito que aún no existe: el SP lo crea (o reutiliza si ya existe con ese nombre) */
   agreementName: optText(150),
   agreementMemberCode: optText(40),
+  // ---- Ficha avanzada (opcionales en la estándar) ----
+  /** Modo de la ficha con que se capturó: en ADVANCED se exigen celular, captación, doctor, tipo de atención y tarifario */
+  formMode: z.enum(['STANDARD', 'ADVANCED']).default('STANDARD'),
+  motherLastName: optText(100),
+  mobile: optText(40),
+  messaging: optText(40),
+  maritalStatusId: optUuid,
+  acquisitionSourceId: optUuid,
+  cardNumber: optText(40),
+  districtId: optUuid,
+  homeBranchId: optUuid,
+  assignedDoctorId: optUuid,
+  attentionTypeId: optUuid,
+  priceListId: optUuid,
+  titularPatientId: optUuid,
+  titularRelationshipId: optUuid,
+}).superRefine((p, ctx) => {
+  if (p.formMode !== 'ADVANCED') return;
+  const req = (k: keyof typeof p, message: string) => { if (!p[k]) ctx.addIssue({ code: 'custom', path: [k], message }); };
+  req('motherLastName', 'Ingresa el apellido materno');
+  req('mobile', 'Ingresa el celular');
+  req('acquisitionSourceId', 'Indica cómo nos conoció');
+  req('assignedDoctorId', 'Asigna un doctor');
+  req('attentionTypeId', 'Indica el tipo de atención');
+  req('priceListId', 'Elige el tarifario');
 }).superRefine((p, ctx) => {
   if (!p.requiresGuardian && !isMinor(p.birthDate)) return;
   if (!p.guardianName) ctx.addIssue({ code: 'custom', path: ['guardianName'], message: 'Ingresa el nombre del apoderado' });
@@ -256,6 +284,27 @@ export const branchSchema = z.object({
   phone: optText(40),
   isMain: z.boolean().default(false),
   isActive: z.boolean().default(true),
+  /** Modo de ficha de la sede (vacío = el de la clínica). Lo define el super admin */
+  patientFormMode: z.enum(['STANDARD', 'ADVANCED']).nullish().or(z.literal('').transform(() => null)),
+});
+
+export const priceListSchema = z.object({
+  id: uuid,
+  code: z.string().trim().min(1, 'Requerido').max(30).regex(/^[A-Za-z0-9_-]+$/, 'Sólo letras, números, guion y guion bajo'),
+  name: text(120).min(2, 'Requerido'),
+  groupName: optText(120),
+  branchId: optUuid,
+  isDefault: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+});
+export const priceListItemSchema = z.object({ serviceId: uuid, price: z.coerce.number().min(0).max(9_999_999).nullable() });
+
+/** Perfil propio del usuario: apodo y avatar (un toque divertido) y cumpleaños */
+export const profileSchema = z.object({
+  fullName: text(200).min(2),
+  nickname: optText(40),
+  avatar: z.string().max(40).regex(/^[a-z0-9-]*$/).nullish(),
+  birthDate: optDate,
 });
 
 export const agreementSchema = z.object({
@@ -318,6 +367,8 @@ export const budgetSchema = z.object({
   agreementId: optUuid,
   /** Sede; vacío = sede principal */
   branchId: optUuid,
+  /** Tarifario aplicado (los precios unitarios vienen de él) */
+  priceListId: optUuid,
   notes: optText(2000),
   items: z.array(budgetItemSchema).min(1, 'Agrega al menos un tratamiento').max(200),
   marks: z.array(odontogramMarkSchema).max(500).default([]),

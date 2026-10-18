@@ -68,7 +68,8 @@ DROP PROCEDURE IF EXISTS sp_session_get $$
 CREATE PROCEDURE sp_session_get(IN p_token_hash CHAR(64))
 BEGIN
   SELECT s.id AS session_id, s.expires_at, s.last_seen_at, s.mfa_verified,
-         u.id AS user_id, u.email, u.full_name, u.tenant_id, u.must_change_password, u.totp_enabled,
+         u.id AS user_id, u.email, u.full_name, u.nickname, u.avatar, u.birth_date, u.tenant_id, u.must_change_password, u.totp_enabled,
+         t.patient_form_mode,
          r.code AS role_code, r.name AS role_name, r.permissions, u.permission_overrides,
          t.trade_name AS tenant_name, t.code AS tenant_code, t.primary_color, t.secondary_color,
          t.logo_file_id, t.timezone, ts.code AS tenant_status_code,
