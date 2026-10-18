@@ -12,6 +12,7 @@ import { ReferralsTab } from '@/components/patients/referrals-tab';
 import { GuaranteeLettersTab } from '@/components/patients/guarantee-letters-tab';
 import { OrthoBudgetsTab } from '@/components/patients/ortho-budgets-tab';
 import { DependentsTab } from '@/components/patients/dependents-tab';
+import { ClinicalNotesTab } from '@/components/patients/clinical-notes-tab';
 import { api, ApiError } from '@/lib/client/api';
 import { PatientForm, type PatientFormValue } from '@/components/patients/patient-form';
 import { Odontogram, OdontogramLegend, toConditions, type Mark } from '@/components/odontogram/odontogram';
@@ -25,7 +26,7 @@ type Full = PatientFormValue & {
   assignedDoctorName: string | null; attentionTypeName: string | null; priceListName: string | null; priceListGroup: string | null;
   titularName: string | null; titularRecordNumber: string | null; titularRelationshipName: string | null;
 };
-type Tab = 'datos' | 'dependientes' | 'derivaciones' | 'citas' | 'archivos' | 'odontograma' | 'presupuestos' | 'ortodoncia' | 'garantias';
+type Tab = 'datos' | 'historia' | 'dependientes' | 'derivaciones' | 'citas' | 'archivos' | 'odontograma' | 'presupuestos' | 'ortodoncia' | 'garantias';
 
 export default function PatientDetail() {
   const { id } = useParams<{ id: string }>();
@@ -81,13 +82,13 @@ export default function PatientDetail() {
         </>}
       />
       <Tabs<Tab> value={tab} onChange={setTab} tabs={mode === 'ADVANCED' ? [
-        { value: 'datos', label: 'Datos personales' }, { value: 'dependientes', label: 'Dependientes' },
+        { value: 'datos', label: 'Datos personales' }, { value: 'historia', label: 'Historia clínica' }, { value: 'dependientes', label: 'Dependientes' },
         { value: 'derivaciones', label: 'Derivaciones' }, { value: 'citas', label: 'Citas' },
         { value: 'archivos', label: 'Imágenes y archivos' }, { value: 'odontograma', label: 'Odontograma' },
         { value: 'presupuestos', label: 'Presupuestos operatorias' }, { value: 'ortodoncia', label: 'Presupuestos de ortodoncia' },
         { value: 'garantias', label: 'Carta de garantía' },
       ] : [
-        { value: 'datos', label: 'Datos' }, { value: 'odontograma', label: 'Odontograma' },
+        { value: 'datos', label: 'Datos' }, { value: 'historia', label: 'Historia clínica' }, { value: 'odontograma', label: 'Odontograma' },
         { value: 'presupuestos', label: 'Presupuestos' }, { value: 'citas', label: 'Citas' },
         { value: 'archivos', label: 'Imágenes y archivos' },
       ]} />
@@ -149,6 +150,7 @@ export default function PatientDetail() {
           )}
         </Card>
       )}
+      {tab === 'historia' && <ClinicalNotesTab patientId={id} medicalHistory={full?.medicalHistory} allergies={full?.allergies} />}
       {tab === 'odontograma' && <PatientOdontogram patientId={id} writable={writable} />}
       {tab === 'presupuestos' && <PatientBudgets patientId={id} />}
       {tab === 'citas' && <PatientAppointments patientId={id} />}

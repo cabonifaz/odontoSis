@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { KeyRound, Pencil, Plus, ShieldCheck, Trash2, UserCog } from 'lucide-react';
+import { KeyRound, Pencil, Plus, ShieldCheck, ShieldOff, Trash2, UserCog } from 'lucide-react';
 import { Badge, Button, Card, Checkbox, EmptyState, Input, Modal, PageHeader, Select, Spinner, Table, Td, Th } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { api, ApiError, fieldErrors } from '@/lib/client/api';
@@ -36,7 +36,7 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false);
   const [dni, setDni] = useState('');
   const [temp, setTemp] = useState<{ email: string; tempPassword: string } | null>(null);
-  const [confirm, setConfirm] = useState<{ kind: 'delete' | 'reset'; u: U } | null>(null);
+  const [confirm, setConfirm] = useState<{ kind: 'delete' | 'reset' | 'mfa'; u: U } | null>(null);
 
   const load = useCallback(() => { api<typeof data>('/api/users').then(setData); }, []);
   useEffect(load, [load]);
@@ -69,6 +69,9 @@ export default function UsersPage() {
       if (confirm.kind === 'delete') {
         await api(`/api/users/${confirm.u.id}`, { method: 'DELETE' });
         toast.success('Usuario eliminado.');
+      } else if (confirm.kind === 'mfa') {
+        await api(`/api/users/${confirm.u.id}/reset-mfa`, { method: 'POST' });
+        toast.success('2FA restablecido. Deberá configurarlo de nuevo al ingresar.');
       } else {
         const r = await api<{ tempPassword: string }>(`/api/users/${confirm.u.id}/reset-password`, { method: 'POST' });
         setTemp({ email: confirm.u.email, tempPassword: r.tempPassword });
@@ -122,6 +125,7 @@ export default function UsersPage() {
                   <Td className="whitespace-nowrap text-right">
                     <Button size="sm" variant="ghost" aria-label="Editar" onClick={() => { setErrors({}); setForm({ id: u.id, email: u.email, fullName: u.full_name, roleCode: u.role_code, isActive: !!u.is_active, isNew: false, perms: userPerms(u.role_permissions, u.permission_overrides) }); }}><Pencil className="size-4" /></Button>
                     <Button size="sm" variant="ghost" aria-label="Restablecer contraseña" onClick={() => setConfirm({ kind: 'reset', u })}><KeyRound className="size-4" /></Button>
+                    {!!u.totp_enabled && u.id !== session.userId && <Button size="sm" variant="ghost" aria-label="Restablecer 2FA" title="Restablecer 2FA (perdió su autenticador)" onClick={() => setConfirm({ kind: 'mfa', u })}><ShieldOff className="size-4" /></Button>}
                     {u.id !== session.userId && <Button size="sm" variant="ghost" aria-label="Eliminar" className="text-danger" onClick={() => setConfirm({ kind: 'delete', u })}><Trash2 className="size-4" /></Button>}
                   </Td>
                 </tr>
@@ -159,9 +163,9 @@ export default function UsersPage() {
           </div>
         )}
       </Modal>
-      <Modal open={!!confirm} onClose={() => setConfirm(null)} title={confirm?.kind === 'delete' ? 'Eliminar usuario' : 'Restablecer contraseña'} size="sm"
+      <Modal open={!!confirm} onClose={() => setConfirm(null)} title={confirm?.kind === 'delete' ? 'Eliminar usuario' : confirm?.kind === 'mfa' ? 'Restablecer 2FA' : 'Restablecer contraseña'} size="sm"
         footer={<><Button variant="secondary" onClick={() => setConfirm(null)}>Cancelar</Button><Button variant={confirm?.kind === 'delete' ? 'danger' : 'primary'} onClick={runConfirm}>Confirmar</Button></>}>
-        <p className="text-sm">{confirm?.kind === 'delete' ? `¿Eliminar el acceso de ${confirm?.u.full_name}? Se cerrarán sus sesiones.` : `Se generará una nueva contraseña temporal para ${confirm?.u.full_name} y se cerrarán sus sesiones.`}</p>
+        <p className="text-sm">{confirm?.kind === 'delete' ? `¿Eliminar el acceso de ${confirm?.u.full_name}? Se cerrarán sus sesiones.` : confirm?.kind === 'mfa' ? `Se desactivará la verificación en dos pasos de ${confirm?.u.full_name} y se cerrarán sus sesiones. Úsalo sólo si perdió su celular o su app de autenticación; deberá configurarla otra vez.` : `Se generará una nueva contraseña temporal para ${confirm?.u.full_name} y se cerrarán sus sesiones.`}</p>
       </Modal>
       <TempPasswordModal data={temp} onClose={() => setTemp(null)} />
     </>

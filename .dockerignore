@@ -11,3 +11,4 @@ playwright
 public/sw.js
 public/sw.js.map
 *.tmp.mjs
+scripts/.tmp-*

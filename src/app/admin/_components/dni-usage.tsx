@@ -6,7 +6,7 @@ import { formatDate, parseDbDate } from '@/lib/shared/format';
 
 export type DniUsage = {
   enabled: boolean;
-  summary: { used: number; found: number; not_found: number; failed: number; quota: number; alert_pct: number; cycle_day: number; cycle_start: string; cycle_end: string; last_at: string | null };
+  summary: { used: number; found: number; not_found: number; failed: number; quota: number; alert_pct: number; cycle_day: number; tenant_cap: number; user_cap: number; cycle_start: string; cycle_end: string; last_at: string | null };
   byTenant: { tenant_id: string | null; tenant_name: string; used: number; last_at: string }[];
   byDay: { day: string; used: number }[];
   history: { cycle_start: string; cycle_end: string; used: number }[];

@@ -73,15 +73,20 @@ CREATE PROCEDURE sp_file_create(
   IN p_storage_key VARCHAR(255), IN p_original_name VARCHAR(255), IN p_mime VARCHAR(100), IN p_size INT, IN p_sha256 CHAR(64))
 BEGIN
   DECLARE v_max_mb INT; DECLARE v_used BIGINT;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
+  START TRANSACTION;
   IF p_tenant_id IS NOT NULL THEN
-    SELECT p.max_storage_mb INTO v_max_mb FROM tenant t JOIN plan p ON p.id = t.plan_id WHERE t.id = p_tenant_id;
-    SELECT COALESCE(SUM(size_bytes), 0) INTO v_used FROM file_asset WHERE tenant_id = p_tenant_id AND deleted_at IS NULL;
+    -- FOR UPDATE serializa las subidas concurrentes de la clínica (evita superar la cuota en paralelo).
+    -- Cuenta todo binario aún en disco (purged_at NULL), incluso eliminados en periodo de gracia.
+    SELECT p.max_storage_mb INTO v_max_mb FROM tenant t JOIN plan p ON p.id = t.plan_id WHERE t.id = p_tenant_id FOR UPDATE;
+    SELECT COALESCE(SUM(size_bytes), 0) INTO v_used FROM file_asset WHERE tenant_id = p_tenant_id AND purged_at IS NULL;
     IF v_used + p_size > v_max_mb * 1024 * 1024 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:PLAN_STORAGE_LIMIT'; END IF;
   END IF;
   INSERT INTO file_asset (id, tenant_id, kind, storage_key, original_name, mime_type, size_bytes, sha256, created_by, updated_by)
   VALUES (p_id, p_tenant_id, p_kind, p_storage_key, LEFT(p_original_name, 255), p_mime, p_size, p_sha256, p_actor_id, p_actor_id);
   CALL sp_audit_log_add(p_tenant_id, p_actor_id, 'file_asset', p_id, 'CREATE',
        JSON_OBJECT('kind', p_kind, 'name', LEFT(p_original_name, 255), 'size', p_size), p_ip);
+  COMMIT;
 END $$
 
 -- p_tenant_id NULL = super admin (acceso a cualquier archivo)
@@ -91,6 +96,35 @@ BEGIN
   SELECT id, tenant_id, kind, storage_key, original_name, mime_type, size_bytes, sha256, updated_at
     FROM file_asset
    WHERE id = p_id AND deleted_at IS NULL AND (p_is_platform = 1 OR tenant_id <=> p_tenant_id);
+END $$
+
+-- ---------------- Recolección de binarios huérfanos (volumen compartido) ----------------
+-- 1) Capturas de solicitudes subidas y nunca vinculadas (> 24 h) se marcan eliminadas.
+-- 2) Devuelve binarios a borrar del disco: eliminados y no purgados; los clínicos (PATIENT_FILE) vinculados
+--    a la ficha se conservan 30 días por si se eliminaron por error; los descartados sin ficha, de inmediato.
+DROP PROCEDURE IF EXISTS sp_file_gc_candidates $$
+CREATE PROCEDURE sp_file_gc_candidates(IN p_limit INT)
+BEGIN
+  UPDATE file_asset fa
+     SET fa.deleted_at = UTC_TIMESTAMP(3), fa.updated_by = NULL
+   WHERE fa.kind = 'REQUEST_ATTACHMENT' AND fa.deleted_at IS NULL
+     AND fa.created_at < UTC_TIMESTAMP(3) - INTERVAL 24 HOUR
+     AND NOT EXISTS (SELECT 1 FROM tenant_request_attachment a WHERE a.file_id = fa.id);
+
+  SELECT fa.id, fa.storage_key
+    FROM file_asset fa
+   WHERE fa.deleted_at IS NOT NULL AND fa.purged_at IS NULL
+     AND (fa.kind <> 'PATIENT_FILE'
+          OR fa.deleted_at < UTC_TIMESTAMP(3) - INTERVAL 30 DAY
+          OR NOT EXISTS (SELECT 1 FROM patient_file pf WHERE pf.file_id = fa.id))
+   ORDER BY fa.deleted_at
+   LIMIT p_limit;
+END $$
+
+DROP PROCEDURE IF EXISTS sp_file_mark_purged $$
+CREATE PROCEDURE sp_file_mark_purged(IN p_id CHAR(36))
+BEGIN
+  UPDATE file_asset SET purged_at = UTC_TIMESTAMP(3) WHERE id = p_id AND deleted_at IS NOT NULL AND purged_at IS NULL;
 END $$
 
 DELIMITER ;

@@ -23,7 +23,7 @@ export function DocumentNumberInput({ label = 'N° de documento', value, onChang
 
   useEffect(() => {
     if (enabledCache !== null) return;
-    api<{ enabled: boolean }>('/api/identity/dni?check=1').then((r) => { enabledCache = r.enabled; setEnabled(r.enabled); }).catch(() => {});
+    api<{ enabled: boolean }>('/api/identity/dni').then((r) => { enabledCache = r.enabled; setEnabled(r.enabled); }).catch(() => {});
   }, []);
 
   const canSearch = enabled && isDni && /^\d{8}$/.test(value);
@@ -32,7 +32,7 @@ export function DocumentNumberInput({ label = 'N° de documento', value, onChang
     setLoading(true);
     setMsg(null);
     try {
-      const d = await api<DniData>(`/api/identity/dni?numero=${value}`);
+      const d = await api<DniData>('/api/identity/dni', { body: { numero: value } });
       onFound(d);
       setMsg({ ok: true, text: `Datos de RENIEC: ${d.fullName}` });
     } catch (e) {

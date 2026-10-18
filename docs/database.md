@@ -23,6 +23,8 @@ database/migrations/V005__agreements.sql          convenios (empresas/clubes) en
 database/migrations/V006__user_permission_overrides.sql  permisos por usuario (budgets.edit)
 database/migrations/V007__contracts_implementation.sql  contratos, periodo de implementación y solicitudes
 database/migrations/V008__branches.sql            sedes (locales) con límite por plan
+database/migrations/V017__bulk_import.sql        carga masiva: import_batch, historia clínica (patient_clinical_note), claves externas
+database/migrations/V019__import_unique_keys.sql  claves únicas de la carga masiva (código externo de citas/presupuestos, código de doctor)
 database/procedures/0x0_*.sql                stored procedures (repetibles)
 ```
 
@@ -54,13 +56,15 @@ database/procedures/0x0_*.sql                stored procedures (repetibles)
 | `tenant_request` | Solicitudes de la clínica (mejora, error, consulta, capacitación) atendidas por la plataforma |
 | `tenant_sequence` | Correlativos por clínica (H.C., N° de presupuesto) |
 | `role`, `app_user`, `user_session` | Seguridad (sesiones guardadas como hash SHA-256 del token) |
-| `doctor`, `patient`, `service` | Clínica. El paciente incluye apoderado (obligatorio si es menor de 18 años; validado en el SP) y convenio con N° de socio |
+| `doctor`, `patient`, `service` | Clínica. El paciente incluye apoderado (obligatorio si es menor de 18 años; validado en el SP) y convenio con N° de socio. `doctor.code`: código del doctor en el sistema anterior (carga masiva) |
 | `agreement` | Maestro de convenios de la clínica (lo administra el administrador): empresa o club, % de descuento y vigencia; el paciente sólo elige convenios del maestro (N° de socio opcional). El presupuesto guarda una copia del nombre y % aplicados |
-| `budget`, `budget_item` | Presupuestos (totales calculados en el SP) |
+| `budget`, `budget_item` | Presupuestos (totales calculados en el SP). `budget.external_code`: código del sistema anterior (carga masiva) |
 | `odontogram`, `odontogram_mark` | Odontograma del paciente o del presupuesto |
-| `appointment` | Citas (control de choques en el SP) |
+| `appointment` | Citas (control de choques en el SP). `external_code`: código del sistema anterior (carga masiva) |
 | `file_asset` | Metadatos de archivos (el binario vive en el volumen `UPLOAD_DIR`) |
 | `platform_setting` | Parámetros globales del super admin (cupo de DNI, % de alerta, día de renovación) |
 | `dni_lookup` | Consumo de la consulta de DNI (sólo blind index del DNI, resultado y si consumió cupo) |
+| `import_batch` | Historial de la carga masiva (sólo en implementación): entidad (catálogo `IMPORT_ENTITY`), estado (`IMPORT_STATUS`), archivo y su SHA-256, filas totales / OK / con error, registros nuevos / actualizados, duración y las primeras 300 filas con error (sin datos sensibles) |
+| `patient_clinical_note` | Historia clínica: notas de evolución por fecha y doctor. Texto cifrado (`note_enc`) + HMAC (`note_bidx`) para no duplicar al re-importar; `external_code` del sistema anterior. Se muestra sólo lectura en la ficha (pestaña Historia clínica) |
 | `audit_log` | Bitácora |
 | `schema_migration` | Control de migraciones |

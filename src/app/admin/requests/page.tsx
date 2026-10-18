@@ -1,16 +1,17 @@
 'use client';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { LifeBuoy, MessageSquareReply } from 'lucide-react';
+import { LifeBuoy, MessageSquareReply, Paperclip } from 'lucide-react';
 import { Badge, Button, Card, EmptyState, Modal, PageHeader, Select, Spinner, Table, Td, Textarea, Th } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { api, ApiError, fieldErrors } from '@/lib/client/api';
 import { formatDateTime } from '@/lib/shared/format';
+import { AttachmentThumbs, type Attachment } from '@/components/image-attachments';
 
 type RequestRow = {
   id: string; tenant_id: string; tenant_name: string; type_code: string; type_name: string; type_color: string | null;
   status_code: string; status_name: string; status_color: string | null; title: string; description: string;
-  response: string | null; created_at: string; updated_at: string | null; created_by_name: string | null;
+  response: string | null; created_at: string; updated_at: string | null; created_by_name: string | null; attachments: Attachment[] | null;
 };
 type TenantOpt = { id: string; trade_name: string };
 
@@ -108,6 +109,7 @@ export default function RequestsPage() {
                   <Td>
                     <button type="button" onClick={() => open(r)} className="text-left font-medium hover:text-brand">{r.title}</button>
                     <p className="line-clamp-1 max-w-md text-xs text-muted">{r.description}</p>
+                    {!!r.attachments?.length && <p className="mt-0.5 flex items-center gap-1 text-xs text-brand"><Paperclip className="size-3" aria-hidden />{r.attachments.length} captura{r.attachments.length > 1 ? 's' : ''}</p>}
                   </Td>
                   <Td label="Clínica"><Link href={`/admin/tenants/${r.tenant_id}`} className="hover:text-brand">{r.tenant_name}</Link></Td>
                   <Td label="Tipo"><Badge color={r.type_color}>{r.type_name}</Badge></Td>
@@ -139,6 +141,7 @@ export default function RequestsPage() {
                 {current.tenant_name}{current.created_by_name && <> · {current.created_by_name}</>} · {formatDateTime(current.created_at)}
               </p>
               <p className="whitespace-pre-line break-words rounded-control bg-surface-2 p-3 text-sm">{current.description}</p>
+              <AttachmentThumbs files={current.attachments} size={88} />
             </div>
             <form id="request-form" onSubmit={submit} noValidate className="grid gap-4">
               <Select label="Estado" required value={form.statusCode} onChange={(e) => setForm({ ...form, statusCode: e.target.value })}

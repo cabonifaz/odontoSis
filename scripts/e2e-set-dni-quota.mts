@@ -11,7 +11,7 @@ const arg = process.argv[2];
 if (arg) {
   const q = await dniQuotaStatus();
   const quota = arg === 'used' ? Number(q.used) : Number(arg);
-  await saveDniSettings({ userId: null as unknown as string, ip: 'e2e' }, { quota, alertPct: Number(q.alert_pct), cycleDay: 1 });
+  await saveDniSettings({ userId: null as unknown as string, ip: 'e2e' }, { quota, alertPct: Number(q.alert_pct), cycleDay: 1, tenantCap: 0, userCap: 1000 });
 }
 const s = await dniQuotaStatus();
 console.log(JSON.stringify({ used: Number(s.used), quota: Number(s.quota) }));

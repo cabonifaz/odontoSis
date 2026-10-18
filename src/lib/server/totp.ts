@@ -35,15 +35,16 @@ function hotp(secret: Buffer, counter: number): string {
 }
 
 /** Verifica con tolerancia de ±1 intervalo de 30 s. */
-export function verifyTotp(secretB32: string, token: string): boolean {
-  if (!/^\d{6}$/.test(token)) return false;
+/** Devuelve el paso (contador) que coincidió o null; el llamador rechaza pasos ya usados (anti-repetición). */
+export function verifyTotp(secretB32: string, token: string): number | null {
+  if (!/^\d{6}$/.test(token)) return null;
   const secret = base32Decode(secretB32);
   const counter = Math.floor(Date.now() / 30_000);
   for (const w of [-1, 0, 1]) {
     const expected = Buffer.from(hotp(secret, counter + w));
-    if (timingSafeEqual(expected, Buffer.from(token))) return true;
+    if (timingSafeEqual(expected, Buffer.from(token))) return counter + w;
   }
-  return false;
+  return null;
 }
 
 export function totpUri(secret: string, account: string, issuer = 'OdontoSis') {

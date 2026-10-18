@@ -83,7 +83,11 @@ CREATE PROCEDURE sp_tenant_request_list(IN p_tenant_id CHAR(36), IN p_status_cod
 BEGIN
   SELECT r.id, r.tenant_id, t.trade_name AS tenant_name, ty.code AS type_code, ty.name AS type_name, ty.value AS type_color,
          st.code AS status_code, st.name AS status_name, st.value AS status_color, r.title, r.description, r.response,
-         r.created_at, r.updated_at, u.full_name AS created_by_name
+         r.created_at, r.updated_at, u.full_name AS created_by_name,
+         (SELECT JSON_ARRAYAGG(JSON_OBJECT('id', fa.id, 'name', fa.original_name, 'mime', fa.mime_type))
+            FROM (SELECT a.file_id, a.sort_order FROM tenant_request_attachment a
+                   WHERE a.request_id = r.id AND a.deleted_at IS NULL ORDER BY a.sort_order) x
+            JOIN file_asset fa ON fa.id = x.file_id AND fa.deleted_at IS NULL) AS attachments
     FROM tenant_request r
     JOIN tenant t ON t.id = r.tenant_id
     JOIN master_item ty ON ty.id = r.type_id
@@ -98,14 +102,32 @@ END $$
 DROP PROCEDURE IF EXISTS sp_tenant_request_create $$
 CREATE PROCEDURE sp_tenant_request_create(
   IN p_tenant_id CHAR(36), IN p_actor_id CHAR(36), IN p_ip VARCHAR(64), IN p_id CHAR(36), IN p_type_code VARCHAR(60),
-  IN p_title VARCHAR(200), IN p_description TEXT)
+  IN p_title VARCHAR(200), IN p_description TEXT, IN p_file_ids JSON)
 BEGIN
   DECLARE v_type CHAR(36); DECLARE v_status CHAR(36);
+  DECLARE v_n, v_ok INT DEFAULT 0;
   CALL sp__master_id('REQUEST_TYPE', p_type_code, NULL, v_type);
   CALL sp__master_id('REQUEST_STATUS', 'OPEN', NULL, v_status);
+  -- Capturas adjuntas: hasta 5, de la misma clínica, subidas por el mismo usuario y sin vincular a otra solicitud
+  SET v_n = COALESCE(JSON_LENGTH(p_file_ids), 0);
+  IF v_n > 5 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:TOO_MANY_ATTACHMENTS'; END IF;
+  IF v_n > 0 THEN
+    SELECT COUNT(DISTINCT fa.id) INTO v_ok
+      FROM JSON_TABLE(p_file_ids, '$[*]' COLUMNS (ord FOR ORDINALITY, fid CHAR(36) PATH '$')) j
+      JOIN file_asset fa ON fa.id = j.fid COLLATE utf8mb4_0900_ai_ci
+     WHERE fa.tenant_id = p_tenant_id AND fa.kind = 'REQUEST_ATTACHMENT' AND fa.created_by = p_actor_id AND fa.deleted_at IS NULL
+       AND NOT EXISTS (SELECT 1 FROM tenant_request_attachment a WHERE a.file_id = fa.id);
+    IF v_ok <> v_n THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:INVALID_ATTACHMENT'; END IF;
+  END IF;
+
   INSERT INTO tenant_request (id, tenant_id, type_id, status_id, title, description, created_by, updated_by)
   VALUES (p_id, p_tenant_id, v_type, v_status, p_title, p_description, p_actor_id, p_actor_id);
-  CALL sp_audit_log_add(p_tenant_id, p_actor_id, 'tenant_request', p_id, 'CREATE', JSON_OBJECT('type', p_type_code, 'title', p_title), p_ip);
+  IF v_n > 0 THEN
+    INSERT INTO tenant_request_attachment (id, tenant_id, request_id, file_id, sort_order, created_by, updated_by)
+    SELECT UUID(), p_tenant_id, p_id, j.fid, j.ord, p_actor_id, p_actor_id
+      FROM JSON_TABLE(p_file_ids, '$[*]' COLUMNS (ord FOR ORDINALITY, fid CHAR(36) PATH '$')) j;
+  END IF;
+  CALL sp_audit_log_add(p_tenant_id, p_actor_id, 'tenant_request', p_id, 'CREATE', JSON_OBJECT('type', p_type_code, 'title', p_title, 'attachments', v_n), p_ip);
 END $$
 
 -- Atención de la solicitud por la plataforma

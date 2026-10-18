@@ -24,8 +24,12 @@ export function decrypt(payload: unknown): string | null {
   if (typeof payload !== 'string' || payload === '') return null;
   const [version, iv, tag, ct] = payload.split('.');
   if (version !== VERSION || !iv || !tag || !ct) throw new Error('Formato de dato cifrado inválido');
-  const decipher = createDecipheriv('aes-256-gcm', key(), Buffer.from(iv, 'base64url'));
-  decipher.setAuthTag(Buffer.from(tag, 'base64url'));
+  const ivBuf = Buffer.from(iv, 'base64url');
+  const tagBuf = Buffer.from(tag, 'base64url');
+  // Etiqueta GCM completa (16 bytes) e IV de 12: no se aceptan etiquetas truncadas
+  if (ivBuf.length !== 12 || tagBuf.length !== 16) throw new Error('Formato de dato cifrado inválido');
+  const decipher = createDecipheriv('aes-256-gcm', key(), ivBuf, { authTagLength: 16 });
+  decipher.setAuthTag(tagBuf);
   return Buffer.concat([decipher.update(Buffer.from(ct, 'base64url')), decipher.final()]).toString('utf8');
 }
 

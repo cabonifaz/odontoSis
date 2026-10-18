@@ -1,11 +1,14 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Input } from '@/components/ui';
 import { api, ApiError } from '@/lib/client/api';
+import { wipeIdleLocalData } from '@/lib/client/offline-db';
 
 export function LoginForm({ tenantCode }: { tenantCode?: string } = {}) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Equipo compartido: no dejar datos de pacientes de la sesión anterior en este navegador
+  useEffect(() => { void wipeIdleLocalData(); }, []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

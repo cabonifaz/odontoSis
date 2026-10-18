@@ -26,9 +26,20 @@ type SessionRow = {
 const ttlDate = () => new Date(Date.now() + env().SESSION_TTL_HOURS * 3600_000);
 const toDb = toDbDateTime;
 
+/**
+ * IP del cliente. Detrás del proxy de Railway, X-Forwarded-For llega como "<lo que mandó el cliente>, <IP real>":
+ * las entradas de la izquierda las controla el atacante, así que se toma la que agregó el proxy de confianza
+ * (contando TRUSTED_PROXY_HOPS desde la derecha, por defecto 1). Nunca la primera.
+ */
+export function clientIpFrom(xff: string | null, realIp: string | null, hops = Number(process.env.TRUSTED_PROXY_HOPS ?? 1)) {
+  const parts = (xff ?? '').split(',').map((p) => p.trim()).filter(Boolean);
+  const ip = parts.length ? parts[Math.max(0, parts.length - Math.max(1, hops))] : realIp?.trim();
+  return ip && /^[0-9a-fA-F:.]{2,45}$/.test(ip) ? ip : null;
+}
+
 export async function clientInfo() {
   const h = await headers();
-  const ip = (h.get('x-forwarded-for')?.split(',')[0] ?? h.get('x-real-ip') ?? '').trim().slice(0, 64) || null;
+  const ip = clientIpFrom(h.get('x-forwarded-for'), h.get('x-real-ip'));
   return { ip, userAgent: h.get('user-agent')?.slice(0, 300) ?? null };
 }
 
@@ -42,8 +53,16 @@ export async function createSession(userId: string, mfaVerified: boolean) {
     secure: isProd(),
     sameSite: 'lax',
     path: '/',
-    maxAge: 30 * 24 * 3600, // la validez real la controla la BD (expiración deslizante)
+    // Una jornada: en equipos compartidos la cookie no sobrevive días (la BD además limita a 7 días absolutos)
+    maxAge: env().SESSION_TTL_HOURS * 3600,
   });
+}
+
+/** Emite un token nuevo y revoca el anterior (tras verificar el 2FA: evita fijación de sesión). */
+export async function rotateSession(userId: string) {
+  const old = (await cookies()).get(SESSION_COOKIE())?.value;
+  await createSession(userId, true);
+  if (old) await callSp('sp_session_revoke', [sha256(old), (await clientInfo()).ip]);
 }
 
 export async function destroySession() {

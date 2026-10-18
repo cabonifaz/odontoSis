@@ -2,10 +2,11 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
-import { callSp, spRows } from '../db';
+import { callSp, spOne, spRows } from '../db';
 import { env } from '../env';
 import { AppError } from '../errors';
 import { sha256 } from '../crypto';
+import { assertSaneImage } from '../image-guard';
 import { PATIENT_FILE_MAX_BYTES, type PatientFile, type PatientFileInput } from '@/lib/shared/patient-file-schemas';
 import type { Ctx } from './clinic';
 
@@ -35,6 +36,9 @@ export async function savePatientUpload(c: Ctx, patientId: string, file: File) {
   const buf = Buffer.from(await file.arrayBuffer());
   const sig = detectPatientFileType(buf);
   if (!sig) throw invalidFile();
+  assertSaneImage(buf, sig.mime);
+  // El paciente debe existir en la clínica antes de escribir nada en disco
+  if (!(await spOne('sp_patient_get', [c.tenantId, patientId]))) throw new AppError('NOT_FOUND');
 
   const id = randomUUID();
   const folder = `${c.tenantId}/patients/${patientId}`;
@@ -53,9 +57,11 @@ export async function savePatientUpload(c: Ctx, patientId: string, file: File) {
   return { id, mime: sig.mime, name, size: buf.length };
 }
 
-/** Marca como eliminado un archivo subido que no llegó a vincularse a la ficha. */
-export const discardPatientUpload = (c: Ctx, fileId: string) =>
-  callSp('sp_patient_file_asset_discard', [c.tenantId, c.userId, c.ip, fileId]);
+/** Descarta un archivo subido que no llegó a vincularse a la ficha; la recolección borra el binario. */
+export async function discardPatientUpload(c: Ctx, fileId: string) {
+  await callSp('sp_patient_file_asset_discard', [c.tenantId, c.userId, c.ip, fileId]);
+  void import('./file-gc').then((m) => m.runFileGc()).catch(() => {});
+}
 
 export async function listPatientFiles(tenantId: string, patientId: string): Promise<PatientFile[]> {
   const rows = await spRows('sp_patient_file_list', [tenantId, patientId]);

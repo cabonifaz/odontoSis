@@ -43,3 +43,32 @@
 ## Secretos
 - `.env` nunca se commitea. En Railway cada ambiente tiene sus propias variables y credenciales de BD.
 - Si se pierde `DATA_ENCRYPTION_KEY`, los datos cifrados no se pueden recuperar: respáldala en un gestor de secretos.
+
+## Auditoría de hacking ético (2026-10-18)
+Tres revisiones independientes (autorización y aislamiento; entrada, archivos y denegación de servicio;
+autenticación, sesiones y configuración). **No se encontraron fugas entre clínicas** (68 rutas y sus SP revisados).
+Hallazgos corregidos, cada uno con su prueba de ataque en `tests/e2e/security-hardening.spec.ts`:
+
+| Hallazgo | Corrección |
+|---|---|
+| IP tomada de la primera entrada de `X-Forwarded-For` (falsificable): evadía todos los límites | Se usa la entrada que agrega el proxy de confianza (`TRUSTED_PROXY_HOPS`, por defecto 1, desde la derecha) |
+| Fuerza bruta del 2FA y reutilización de códigos | Contador de fallos en BD: al 5.º se bloquea la cuenta y se revocan sus sesiones; se rechaza un paso TOTP ya usado; token nuevo tras verificar el 2FA |
+| Activar 2FA sin re-autenticación; sin forma de restablecerlo | Exige la contraseña; al activarlo se cierran las demás sesiones; "Restablecer 2FA" para el admin de la clínica y el super admin (auditado) |
+| Cuenta bloqueada respondía distinto (enumeración) | Misma respuesta y mismo costo (hash señuelo) que una clave errónea |
+| Login: argon2 sin control de concurrencia (CPU) | Semáforo: máx. 4 en paralelo y 50 en cola; el resto 429 |
+| Limitador en memoria sin tope (memoria/CPU) | Máx. 50 000 claves con descarte y barrido periódico |
+| Binarios huérfanos al fallar la cuota o descartar subidas: llenado del volumen compartido | Se borra el binario si la BD rechaza; se verifica el paciente antes de escribir; recolección horaria (`instrumentation-node.ts`) de descartes, capturas no usadas (> 24 h) y eliminados (clínicos tras 30 días de gracia). La cuota cuenta todo lo que sigue en disco |
+| Carrera en la cuota de almacenamiento | `sp_file_create` bloquea la fila de la clínica (`FOR UPDATE`) dentro de una transacción |
+| Imágenes con dimensiones absurdas (bomba de descompresión en el navegador) | Se leen las dimensiones de la cabecera (PNG/JPG/WEBP) y se rechazan > 16 000 px o > 80 MP |
+| Cupo de DNI agotable por un solo usuario; carreras al superarlo; GET disparable por enlace | Reserva atómica (`sp_dni_reserve`), tope por clínica/mes y por usuario/día, POST con permiso de registro de personas |
+| `sync/pull` y archivos clínicos sin verificación de permiso | Cada conjunto se entrega según el permiso de lectura; `PATIENT_FILE` exige `patients.read`; límite por usuario |
+| Cuerpos enormes leídos a memoria | `Content-Length` validado antes de leer (2 MB JSON, 16 MB multipart, 8 MB sync) |
+| Presupuesto creado como "aprobado" sin permiso de edición | Sin `budgets.edit` sólo se crean borradores |
+| La clínica podía quedarse sin administrador | `sp__check_last_admin` |
+| Logs con la sentencia SQL interpolada (datos de pacientes, hashes) | Errores de BD saneados: sólo procedimiento y código |
+| Datos offline de pacientes en equipos compartidos | Cookie de una jornada (12 h) y sesión con vida máxima de 7 días; la pantalla de login borra los datos locales sin cambios pendientes |
+| Otros | Etiqueta GCM de 16 bytes obligatoria; claves de cifrado y blind index distintas; `Origin: null` → 403; paginación acotada; `chown -h` en el contenedor |
+
+Pendiente/aceptado: el limitador es por instancia (si se escala a varias réplicas, mover a Redis); la búsqueda con `LIKE`
+no escapa `%`/`_` (sólo afecta el rendimiento dentro de la propia clínica); el super admin puede ver archivos clínicos
+(por diseño, para soporte). Recomendado en producción: un WAF/CDN delante (p. ej. Cloudflare) contra DDoS volumétrico.

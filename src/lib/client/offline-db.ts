@@ -81,3 +81,26 @@ export async function wipeLocalData() {
 }
 
 export type { OfflineDb };
+
+/**
+ * Al llegar a la pantalla de login (sesión cerrada o vencida) se borran los datos locales de pacientes
+ * de cualquier usuario: en un equipo compartido la siguiente persona no debe poder leerlos.
+ * Excepción: las bases con cambios aún no sincronizados se conservan para no perder trabajo
+ * (se suben cuando ese usuario vuelva a ingresar).
+ */
+export async function wipeIdleLocalData() {
+  try {
+    instance?.close();
+    instance = null;
+    const names = (await Dexie.getDatabaseNames()).filter((n) => n.startsWith('odontosis-'));
+    await Promise.all(names.map(async (n) => {
+      const db = new OfflineDb(n);
+      try {
+        const pending = await db.outbox.count();
+        db.close();
+        if (pending === 0) await Dexie.delete(n);
+      } catch { db.close(); }
+    }));
+    navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_CACHES' });
+  } catch { /* IndexedDB no disponible */ }
+}

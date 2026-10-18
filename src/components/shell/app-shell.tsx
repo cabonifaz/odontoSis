@@ -5,16 +5,18 @@ import { useState, type ReactNode } from 'react';
 import {
   CalendarDays, ClipboardList, Cloud, CloudOff, LayoutDashboard, LogOut, Menu, RefreshCw, Settings, ShieldCheck,
   Stethoscope, Tags, UserCog, Handshake, LifeBuoy, FlaskConical, Users, X, Building2, CreditCard, Layers, AlertTriangle, IdCard,
+  FileUp,
 } from 'lucide-react';
 import { cx } from '@/components/ui';
 import { UserAvatar, displayName } from '@/components/avatar';
+import { ProfileQuickModal } from '@/components/profile-quick';
 import { useApp, can } from '@/lib/client/app-context';
 import { api } from '@/lib/client/api';
 import { wipeLocalData } from '@/lib/client/offline-db';
 import { formatDate, formatDateTime } from '@/lib/shared/format';
 import type { ClientSession } from '@/lib/shared/types';
 
-type NavItem = { href: string; label: string; icon: ReactNode; perm?: string };
+type NavItem = { href: string; label: string; icon: ReactNode; perm?: string; /** sólo visible en esa fase de la clínica */ phase?: 'IMPLEMENTATION' };
 
 const CLINIC_NAV: NavItem[] = [
   { href: '/app', label: 'Inicio', icon: <LayoutDashboard className="size-5" /> },
@@ -26,6 +28,7 @@ const CLINIC_NAV: NavItem[] = [
   { href: '/app/doctors', label: 'Doctores', icon: <Stethoscope className="size-5" />, perm: 'doctors.read' },
   { href: '/app/users', label: 'Usuarios', icon: <UserCog className="size-5" />, perm: 'users.manage' },
   { href: '/app/settings', label: 'Configuración', icon: <Settings className="size-5" />, perm: 'settings.manage' },
+  { href: '/app/import', label: 'Carga masiva', icon: <FileUp className="size-5" />, perm: 'settings.manage', phase: 'IMPLEMENTATION' },
   { href: '/app/requests', label: 'Soporte y mejoras', icon: <LifeBuoy className="size-5" /> },
 ];
 
@@ -50,7 +53,8 @@ export async function logout(tenantCode?: string | null) {
 export function AppShell({ session, children }: { session: ClientSession; children: ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const nav = (session.isPlatform ? ADMIN_NAV : CLINIC_NAV).filter((n) => !n.perm || can(session, n.perm));
+  const [profileOpen, setProfileOpen] = useState(false);
+  const nav = (session.isPlatform ? ADMIN_NAV : CLINIC_NAV).filter((n) => (!n.perm || can(session, n.perm)) && (!n.phase || session.tenant?.access.phase === n.phase));
   const isActive = (href: string) => (href === '/app' || href === '/admin' ? pathname === href : pathname.startsWith(href));
   const brandName = session.tenant?.name ?? 'OdontoSis';
 
@@ -83,13 +87,15 @@ export function AppShell({ session, children }: { session: ClientSession; childr
         <button onClick={() => logout(session.tenant?.code)} className="flex w-full items-center gap-3 rounded-control px-3 py-2 text-sm text-muted hover:bg-surface-2 hover:text-fg">
           <LogOut className="size-5" /> Cerrar sesión
         </button>
-        <Link href="/account/security" onClick={() => setOpen(false)} className="mt-2 flex items-center gap-2.5 rounded-control px-3 py-2 hover:bg-surface-2" title={session.email}>
-          <UserAvatar avatar={session.avatar} name={session.fullName} size={32} />
-          <span className="min-w-0">
+        <button type="button" onClick={() => { setOpen(false); setProfileOpen(true); }} aria-label="Personalizar avatar y apodo"
+          className="group mt-2 flex w-full items-center gap-2.5 rounded-control px-3 py-2 text-left hover:bg-surface-2" title="Cambiar avatar y apodo">
+          <UserAvatar avatar={session.avatar} name={session.fullName} size={32} className="transition-transform group-hover:scale-110" />
+          <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium">{displayName(session)}</span>
             <span className="block truncate text-xs text-subtle">{session.nickname ? session.fullName : session.roleName}</span>
           </span>
-        </Link>
+          <span className="text-xs text-subtle opacity-0 transition-opacity group-hover:opacity-100" aria-hidden>Editar</span>
+        </button>
       </div>
     </div>
   );
@@ -97,6 +103,7 @@ export function AppShell({ session, children }: { session: ClientSession; childr
   return (
     <div className="min-h-dvh lg:pl-64">
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-line bg-surface lg:block">{sidebar}</aside>
+      <ProfileQuickModal open={profileOpen} onClose={() => setProfileOpen(false)} session={session} />
 
       {open && (
         <div className="no-print fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Menú">

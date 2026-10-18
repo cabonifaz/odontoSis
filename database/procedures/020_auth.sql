@@ -85,6 +85,7 @@ BEGIN
    WHERE s.token_hash = p_token_hash
      AND s.revoked_at IS NULL AND s.deleted_at IS NULL
      AND s.expires_at > UTC_TIMESTAMP(3)
+     AND s.created_at > UTC_TIMESTAMP(3) - INTERVAL 7 DAY
    LIMIT 1;
 END $$
 
@@ -128,7 +129,7 @@ END $$
 DROP PROCEDURE IF EXISTS sp_user_security_get $$
 CREATE PROCEDURE sp_user_security_get(IN p_user_id CHAR(36))
 BEGIN
-  SELECT id, tenant_id, email, password_hash, totp_enabled, totp_secret_enc
+  SELECT id, tenant_id, email, password_hash, totp_enabled, totp_secret_enc, totp_last_step
     FROM app_user WHERE id = p_user_id AND deleted_at IS NULL;
 END $$
 
@@ -153,7 +154,8 @@ CREATE PROCEDURE sp_user_totp_set(
   IN p_user_id CHAR(36), IN p_secret_enc VARCHAR(255), IN p_enabled TINYINT, IN p_actor_id CHAR(36), IN p_ip VARCHAR(64))
 BEGIN
   DECLARE v_tenant CHAR(36);
-  UPDATE app_user SET totp_secret_enc = p_secret_enc, totp_enabled = p_enabled, updated_by = p_actor_id
+  UPDATE app_user SET totp_secret_enc = p_secret_enc, totp_enabled = p_enabled, totp_last_step = NULL, mfa_failed_count = 0,
+         updated_by = p_actor_id
    WHERE id = p_user_id AND deleted_at IS NULL;
   SELECT tenant_id INTO v_tenant FROM app_user WHERE id = p_user_id;
   CALL sp_audit_log_add(v_tenant, p_actor_id, 'app_user', p_user_id, IF(p_enabled = 1, 'MFA_ENABLED', 'MFA_PENDING'), NULL, p_ip);
@@ -175,6 +177,55 @@ BEGIN
   SELECT f.id, f.storage_key, f.mime_type, f.sha256
     FROM tenant t JOIN file_asset f ON f.id = t.logo_file_id AND f.kind = 'LOGO' AND f.deleted_at IS NULL
    WHERE t.code = LOWER(p_code) AND t.deleted_at IS NULL;
+END $$
+
+-- ---------------- 2FA: fallos, anti-repetición y restablecimiento ----------------
+
+-- Código válido: rechaza reutilizar un paso TOTP ya usado (o anterior) y reinicia el contador de fallos
+DROP PROCEDURE IF EXISTS sp_auth_mfa_succeeded $$
+CREATE PROCEDURE sp_auth_mfa_succeeded(IN p_user_id CHAR(36), IN p_step BIGINT)
+BEGIN
+  DECLARE v_last BIGINT;
+  SELECT totp_last_step INTO v_last FROM app_user WHERE id = p_user_id AND deleted_at IS NULL FOR UPDATE;
+  IF v_last IS NOT NULL AND p_step <= v_last THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:INVALID_MFA';
+  END IF;
+  UPDATE app_user SET totp_last_step = p_step, mfa_failed_count = 0 WHERE id = p_user_id;
+END $$
+
+-- Código inválido: al llegar al máximo se bloquea la cuenta y se revocan TODAS sus sesiones.
+-- Devuelve locked = 1 cuando se bloqueó.
+DROP PROCEDURE IF EXISTS sp_auth_mfa_failed $$
+CREATE PROCEDURE sp_auth_mfa_failed(IN p_user_id CHAR(36), IN p_max_attempts INT, IN p_lock_minutes INT, IN p_ip VARCHAR(64))
+BEGIN
+  DECLARE v_count INT; DECLARE v_tenant CHAR(36);
+  UPDATE app_user SET mfa_failed_count = mfa_failed_count + 1 WHERE id = p_user_id AND deleted_at IS NULL;
+  SELECT mfa_failed_count, tenant_id INTO v_count, v_tenant FROM app_user WHERE id = p_user_id;
+  CALL sp_audit_log_add(v_tenant, p_user_id, 'auth', p_user_id, 'MFA_FAILED', JSON_OBJECT('count', v_count), p_ip);
+  IF v_count >= p_max_attempts THEN
+    UPDATE app_user SET mfa_failed_count = 0, locked_until = UTC_TIMESTAMP(3) + INTERVAL p_lock_minutes MINUTE WHERE id = p_user_id;
+    UPDATE user_session SET revoked_at = UTC_TIMESTAMP(3), updated_by = p_user_id WHERE user_id = p_user_id AND revoked_at IS NULL;
+    CALL sp_audit_log_add(v_tenant, p_user_id, 'auth', p_user_id, 'MFA_LOCKED', NULL, p_ip);
+    SELECT 1 AS locked;
+  ELSE
+    SELECT 0 AS locked;
+  END IF;
+END $$
+
+-- Restablece el 2FA de un usuario (pierde su autenticador). Lo hace el admin de su clínica (p_tenant_id)
+-- o el super admin (p_tenant_id NULL). Revoca sus sesiones: deberá ingresar y volver a configurarlo.
+DROP PROCEDURE IF EXISTS sp_user_totp_reset $$
+CREATE PROCEDURE sp_user_totp_reset(IN p_tenant_id CHAR(36), IN p_actor_id CHAR(36), IN p_ip VARCHAR(64), IN p_user_id CHAR(36))
+BEGIN
+  DECLARE v_tenant CHAR(36); DECLARE v_found INT DEFAULT 0;
+  SELECT COUNT(*), MAX(tenant_id) INTO v_found, v_tenant FROM app_user
+   WHERE id = p_user_id AND deleted_at IS NULL AND (p_tenant_id IS NULL OR tenant_id = p_tenant_id);
+  IF v_found = 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:USER_NOT_FOUND'; END IF;
+  IF p_user_id = p_actor_id THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:CANNOT_RESET_OWN_MFA'; END IF;
+  UPDATE app_user SET totp_enabled = 0, totp_secret_enc = NULL, totp_last_step = NULL, mfa_failed_count = 0, updated_by = p_actor_id
+   WHERE id = p_user_id;
+  UPDATE user_session SET revoked_at = UTC_TIMESTAMP(3), updated_by = p_actor_id WHERE user_id = p_user_id AND revoked_at IS NULL;
+  CALL sp_audit_log_add(v_tenant, p_actor_id, 'app_user', p_user_id, 'MFA_RESET', NULL, p_ip);
 END $$
 
 DELIMITER ;

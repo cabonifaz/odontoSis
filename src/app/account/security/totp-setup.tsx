@@ -9,6 +9,7 @@ export function TotpSetup({ enabled }: { enabled: boolean }) {
   const toast = useToast();
   const [setup, setSetup] = useState<{ secret: string; qr: string } | null>(null);
   const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -21,10 +22,12 @@ export function TotpSetup({ enabled }: { enabled: boolean }) {
     );
   }
 
-  async function start() {
+  async function start(e: React.FormEvent) {
+    e.preventDefault();
     setLoading(true);
-    try { setSetup(await api('/api/auth/totp/setup', { method: 'POST' })); }
-    catch (e) { toast.error(e instanceof ApiError ? e.message : 'Error'); }
+    setError(null);
+    try { setSetup(await api('/api/auth/totp/setup', { body: { password } })); setPassword(''); }
+    catch (err) { setError(err instanceof ApiError ? err.message : 'Error'); }
     finally { setLoading(false); }
   }
 
@@ -44,10 +47,12 @@ export function TotpSetup({ enabled }: { enabled: boolean }) {
 
   if (!setup) {
     return (
-      <div className="space-y-4 text-sm">
+      <form onSubmit={start} className="space-y-4 text-sm">
         <p className="text-muted">Protege tu cuenta con un código temporal de Google Authenticator, Microsoft Authenticator u otra app compatible.</p>
-        <Button onClick={start} loading={loading}>Activar 2FA</Button>
-      </div>
+        <Input type="password" label="Confirma tu contraseña" autoComplete="current-password" value={password}
+          onChange={(e) => setPassword(e.target.value)} error={error} className="sm:max-w-xs" />
+        <Button type="submit" loading={loading} disabled={!password}>Activar 2FA</Button>
+      </form>
     );
   }
 

@@ -58,7 +58,7 @@ export const deleteContract = (a: Actor, tenantId: string, id: string) => callSp
 /** tenantId null = todas (super admin) */
 export const listRequests = (tenantId: string | null, status?: string | null) => spRows('sp_tenant_request_list', [tenantId, status ?? null]);
 export const createRequest = (tenantId: string, a: Actor, r: z.infer<typeof requestCreateSchema>) =>
-  callSp('sp_tenant_request_create', [tenantId, a.userId, a.ip, r.id, r.typeCode, r.title, r.description]);
+  callSp('sp_tenant_request_create', [tenantId, a.userId, a.ip, r.id, r.typeCode, r.title, r.description, JSON.stringify(r.attachmentIds)]);
 export const updateRequest = (a: Actor, id: string, r: z.infer<typeof requestUpdateSchema>) =>
   callSp('sp_tenant_request_update', [a.userId, a.ip, id, r.statusCode, r.response]);
 

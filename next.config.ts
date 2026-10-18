@@ -17,6 +17,9 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['@node-rs/argon2', 'mysql2'],
   experimental: {
     serverActions: { bodySizeLimit: '3mb' },
+    // El middleware (CSP) envuelve /api: sin esto recorta cuerpos a 10 MB y los archivos de paciente admiten 15 MB.
+    // El tamaño real por ruta lo valida route() con Content-Length antes de leer el cuerpo.
+    middlewareClientMaxBodySize: '16mb',
     // Mantiene en memoria las páginas visitadas: permite navegar entre ellas sin conexión
     staleTimes: { dynamic: 300, static: 600 },
   },

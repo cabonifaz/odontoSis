@@ -100,6 +100,7 @@ export const requestCreateSchema = z.object({
   typeCode: z.enum(['IMPROVEMENT', 'BUG', 'QUESTION', 'TRAINING']),
   title: text(200).min(3, 'Describe brevemente la solicitud'),
   description: text(5000).min(5, 'Agrega el detalle'),
+  attachmentIds: z.array(uuid).max(5, 'Puedes adjuntar hasta 5 imágenes').default([]),
 });
 export const requestUpdateSchema = z.object({
   statusCode: z.enum(['OPEN', 'IN_PROGRESS', 'DONE', 'REJECTED']),
@@ -408,4 +409,6 @@ export const dniSettingsSchema = z.object({
   quota: z.coerce.number().int().min(0).max(1_000_000),
   alertPct: z.coerce.number().int().min(1).max(100),
   cycleDay: z.coerce.number().int().min(1).max(28),
+  tenantCap: z.coerce.number().int().min(0).max(1_000_000).default(0),
+  userCap: z.coerce.number().int().min(0).max(10_000).default(30),
 });

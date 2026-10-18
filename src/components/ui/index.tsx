@@ -163,6 +163,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: {
   open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl';
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
@@ -171,12 +172,12 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: {
   }, [open]);
   const widths = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl' };
   return (
-    <dialog ref={ref} onClose={onClose} onCancel={(e) => { e.preventDefault(); onClose(); }}
+    <dialog ref={ref} aria-labelledby={titleId} onClose={onClose} onCancel={(e) => { e.preventDefault(); onClose(); }}
       className={cx('m-auto w-[calc(100%-2rem)] rounded-card border border-line bg-surface p-0 text-fg shadow-modal backdrop:bg-black/40 backdrop:backdrop-blur-[2px]', widths[size])}>
       {open && (
         <div className="flex max-h-[90dvh] flex-col">
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
-            <h2 className="text-lg font-semibold">{title}</h2>
+            <h2 id={titleId} className="text-lg font-semibold">{title}</h2>
             <button onClick={onClose} className="rounded-md p-1 text-muted hover:bg-surface-2" aria-label="Cerrar"><X className="size-5" /></button>
           </div>
           <div className="overflow-y-auto px-5 py-4">{children}</div>

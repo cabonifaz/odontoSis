@@ -108,6 +108,7 @@ BEGIN
   IF v_was_active IS NULL THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:NOT_FOUND'; END IF;
   IF p_id = p_actor_id AND p_is_active = 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:CANNOT_DISABLE_SELF'; END IF;
   CALL sp__resolve_role(p_tenant_id, p_role_code, v_role);
+  IF p_is_active = 0 OR p_role_code <> 'CLINIC_ADMIN' THEN CALL sp__check_last_admin(p_tenant_id, p_id); END IF;
   START TRANSACTION;
   IF p_is_active = 1 AND v_was_active = 0 THEN CALL sp__check_user_quota(p_tenant_id, p_id); END IF;
   UPDATE app_user SET full_name = p_full_name, role_id = v_role, is_active = p_is_active,
@@ -119,6 +120,19 @@ BEGIN
   COMMIT;
 END $$
 
+-- La clínica nunca se queda sin un administrador activo (si p_user_id es hoy el único, se rechaza)
+DROP PROCEDURE IF EXISTS sp__check_last_admin $$
+CREATE PROCEDURE sp__check_last_admin(IN p_tenant_id CHAR(36), IN p_user_id CHAR(36))
+BEGIN
+  IF p_tenant_id IS NOT NULL
+     AND EXISTS (SELECT 1 FROM app_user u JOIN role r ON r.id = u.role_id
+                  WHERE u.id = p_user_id AND u.tenant_id = p_tenant_id AND u.deleted_at IS NULL AND u.is_active = 1 AND r.code = 'CLINIC_ADMIN')
+     AND NOT EXISTS (SELECT 1 FROM app_user u JOIN role r ON r.id = u.role_id
+                      WHERE u.tenant_id = p_tenant_id AND u.id <> p_user_id AND u.deleted_at IS NULL AND u.is_active = 1 AND r.code = 'CLINIC_ADMIN') THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:LAST_ADMIN';
+  END IF;
+END $$
+
 DROP PROCEDURE IF EXISTS sp_user_delete $$
 CREATE PROCEDURE sp_user_delete(IN p_tenant_id CHAR(36), IN p_actor_id CHAR(36), IN p_ip VARCHAR(64), IN p_id CHAR(36))
 BEGIN
@@ -126,6 +140,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM app_user WHERE id = p_id AND tenant_id <=> p_tenant_id AND deleted_at IS NULL) THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:NOT_FOUND';
   END IF;
+  CALL sp__check_last_admin(p_tenant_id, p_id);
   -- Se libera el email (se conserva el original en la bitácora)
   UPDATE app_user
      SET deleted_at = UTC_TIMESTAMP(3), deleted_by = p_actor_id, is_active = 0, updated_by = p_actor_id,

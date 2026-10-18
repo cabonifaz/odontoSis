@@ -25,6 +25,8 @@ test('alta de paciente sin conexión y sincronización al reconectar', async ({ 
 
   // Vuelve al listado (datos locales disponibles sin red)
   await expect(page).toHaveURL(/\/app\/patients$/);
+  // La lista muestra 50 por página: se busca por nombre (búsqueda local, sin red)
+  await page.getByPlaceholder(/Buscar por nombre/).fill(name);
   await expect(page.getByText(name)).toBeVisible();
 
   // Reconexión -> se envía la cola

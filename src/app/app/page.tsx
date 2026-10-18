@@ -6,7 +6,8 @@ import { Badge, Button, Card, EmptyState, PageHeader, Spinner, Stat } from '@/co
 import { useApp, can } from '@/lib/client/app-context';
 import { api, ApiError } from '@/lib/client/api';
 import { formatMoney, formatTime } from '@/lib/shared/format';
-import { displayName } from '@/components/avatar';
+import { displayName, UserAvatar } from '@/components/avatar';
+import { ProfileQuickModal } from '@/components/profile-quick';
 import { BirthdaysCard } from '@/components/dashboard/birthdays-card';
 
 type Dash = {
@@ -24,6 +25,16 @@ export default function DashboardPage() {
     api<Dash>('/api/dashboard').then(setData).catch((e) => e instanceof ApiError && e.isNetwork && setOffline(true));
   }, [online]);
 
+  // Invitación a personalizar avatar y apodo (una vez por usuario, se puede descartar)
+  const nudgeKey = `odx:profile-nudge:${session.userId}`;
+  const [nudge, setNudge] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  useEffect(() => {
+    if (session.avatar || session.nickname) return;
+    try { setNudge(localStorage.getItem(nudgeKey) !== 'off'); } catch { setNudge(true); }
+  }, [session.avatar, session.nickname, nudgeKey]);
+  const dismissNudge = () => { setNudge(false); try { localStorage.setItem(nudgeKey, 'off'); } catch { /* sin almacenamiento */ } };
+
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches';
 
@@ -37,6 +48,19 @@ export default function DashboardPage() {
           {can(session, 'budgets.write') && <Link href="/app/budgets/new"><Button icon={<Plus className="size-4" />}>Nuevo presupuesto</Button></Link>}
         </>}
       />
+      {nudge && (
+        <Card className="mb-4 flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+          <div className="flex -space-x-2" aria-hidden>
+            {['tooth', 'unicorn', 'cool', 'llama'].map((a) => <UserAvatar key={a} avatar={a} name="" size={36} className="ring-2 ring-surface" />)}
+          </div>
+          <p className="flex-1 text-sm"><span className="font-semibold">Dale tu toque al sistema.</span> Elige un avatar divertido y un apodo: así te verá tu equipo y te saludará OdontoSis.</p>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={dismissNudge}>Ahora no</Button>
+            <Button size="sm" onClick={() => setProfileOpen(true)}>Personalizar</Button>
+          </div>
+        </Card>
+      )}
+      <ProfileQuickModal open={profileOpen} onClose={() => setProfileOpen(false)} session={session} />
       {offline && !data ? (
         <Card><EmptyState title="Sin conexión" description="El resumen requiere internet. Puedes seguir usando Agenda, Pacientes y Presupuestos sin conexión." /></Card>
       ) : !data ? <Spinner /> : (

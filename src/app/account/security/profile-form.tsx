@@ -1,9 +1,10 @@
 'use client';
 import { useState } from 'react';
-import { Button, cx, Input } from '@/components/ui';
+import { Button, Input } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { api, ApiError, fieldErrors } from '@/lib/client/api';
-import { AVATARS, UserAvatar } from '@/components/avatar';
+import { UserAvatar } from '@/components/avatar';
+import { AvatarPicker } from '@/components/profile-quick';
 
 /** Perfil propio: avatar, apodo y cumpleaños (para que el equipo te salude 🎉) */
 export function ProfileForm({ initial }: { initial: { fullName: string; nickname: string | null; avatar: string | null; birthDate: string | null } }) {
@@ -36,17 +37,7 @@ export function ProfileForm({ initial }: { initial: { fullName: string; nickname
       </div>
       <div>
         <p className="mb-2 text-sm font-medium">Elige tu avatar</p>
-        <div className="grid grid-cols-5 gap-2 sm:grid-cols-10" role="radiogroup" aria-label="Avatar">
-          {AVATARS.map((a) => (
-            <button key={a.key} type="button" role="radio" aria-checked={v.avatar === a.key} title={a.label} aria-label={a.label}
-              onClick={() => setV({ ...v, avatar: a.key })}
-              className={cx('grid aspect-square place-items-center rounded-full text-2xl transition-transform hover:scale-110',
-                v.avatar === a.key && 'ring-2 ring-brand ring-offset-2 ring-offset-surface')}
-              style={{ backgroundColor: a.bg }}>
-              {a.emoji}
-            </button>
-          ))}
-        </div>
+        <AvatarPicker value={v.avatar} onChange={(avatar) => setV({ ...v, avatar })} />
         {v.avatar && <button type="button" className="mt-2 text-xs text-muted hover:text-fg" onClick={() => setV({ ...v, avatar: '' })}>Usar mis iniciales</button>}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">

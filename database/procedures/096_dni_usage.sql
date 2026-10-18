@@ -48,7 +48,7 @@ CREATE PROCEDURE sp_dni_lookup_add(
   IN p_id CHAR(36), IN p_tenant_id CHAR(36), IN p_user_id CHAR(36), IN p_dni_bidx CHAR(64),
   IN p_outcome VARCHAR(20), IN p_billable TINYINT, IN p_http_status SMALLINT)
 BEGIN
-  IF p_outcome NOT IN ('FOUND', 'NOT_FOUND', 'ERROR', 'QUOTA') THEN
+  IF p_outcome NOT IN ('FOUND', 'NOT_FOUND', 'ERROR', 'QUOTA', 'PENDING') THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:VALIDATION';
   END IF;
   INSERT INTO dni_lookup (id, tenant_id, user_id, dni_bidx, outcome, billable, http_status, created_by, updated_by)
@@ -60,8 +60,10 @@ DROP PROCEDURE IF EXISTS sp_dni_usage_summary $$
 CREATE PROCEDURE sp_dni_usage_summary()
 BEGIN
   DECLARE v_start, v_end, v_s, v_e DATETIME;
-  DECLARE v_quota, v_alert, v_day, i INT;
+  DECLARE v_quota, v_alert, v_day, v_tcap, v_ucap, i INT;
   CALL sp__dni_cycle(0, v_start, v_end);
+  CALL sp__setting_int('DNI_TENANT_MONTHLY_CAP', 0, v_tcap);
+  CALL sp__setting_int('DNI_USER_DAILY_CAP', 30, v_ucap);
   CALL sp__setting_int('DNI_MONTHLY_QUOTA', 100, v_quota);
   CALL sp__setting_int('DNI_ALERT_PCT', 80, v_alert);
   CALL sp__setting_int('DNI_CYCLE_DAY', 1, v_day);
@@ -70,8 +72,8 @@ BEGIN
   SELECT COALESCE(SUM(billable), 0) AS used,
          COALESCE(SUM(outcome = 'FOUND'), 0) AS found,
          COALESCE(SUM(outcome = 'NOT_FOUND'), 0) AS not_found,
-         COALESCE(SUM(outcome IN ('ERROR', 'QUOTA')), 0) AS failed,
-         v_quota AS quota, v_alert AS alert_pct, v_day AS cycle_day,
+         COALESCE(SUM(outcome IN ('ERROR', 'QUOTA') OR (outcome = 'PENDING' AND billable = 0)), 0) AS failed,
+         v_quota AS quota, v_alert AS alert_pct, v_day AS cycle_day, v_tcap AS tenant_cap, v_ucap AS user_cap,
          v_start AS cycle_start, v_end AS cycle_end,
          MAX(created_at) AS last_at
     FROM dni_lookup
@@ -109,17 +111,65 @@ END $$
 -- Ajuste del plan contratado (cupo, alerta y día de renovación)
 DROP PROCEDURE IF EXISTS sp_dni_settings_save $$
 CREATE PROCEDURE sp_dni_settings_save(
-  IN p_actor_id CHAR(36), IN p_ip VARCHAR(64), IN p_quota INT, IN p_alert_pct INT, IN p_cycle_day INT)
+  IN p_actor_id CHAR(36), IN p_ip VARCHAR(64), IN p_quota INT, IN p_alert_pct INT, IN p_cycle_day INT,
+  IN p_tenant_cap INT, IN p_user_cap INT)
 BEGIN
   IF p_quota IS NULL OR p_quota < 0 OR p_alert_pct IS NULL OR p_alert_pct NOT BETWEEN 1 AND 100
-     OR p_cycle_day IS NULL OR p_cycle_day NOT BETWEEN 1 AND 28 THEN
+     OR p_cycle_day IS NULL OR p_cycle_day NOT BETWEEN 1 AND 28
+     OR p_tenant_cap IS NULL OR p_tenant_cap < 0 OR p_user_cap IS NULL OR p_user_cap < 0 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:VALIDATION';
   END IF;
   UPDATE platform_setting SET value = CAST(p_quota AS CHAR),     updated_by = p_actor_id WHERE code = 'DNI_MONTHLY_QUOTA';
   UPDATE platform_setting SET value = CAST(p_alert_pct AS CHAR), updated_by = p_actor_id WHERE code = 'DNI_ALERT_PCT';
   UPDATE platform_setting SET value = CAST(p_cycle_day AS CHAR), updated_by = p_actor_id WHERE code = 'DNI_CYCLE_DAY';
+  UPDATE platform_setting SET value = CAST(p_tenant_cap AS CHAR), updated_by = p_actor_id WHERE code = 'DNI_TENANT_MONTHLY_CAP';
+  UPDATE platform_setting SET value = CAST(p_user_cap AS CHAR), updated_by = p_actor_id WHERE code = 'DNI_USER_DAILY_CAP';
   CALL sp_audit_log_add(NULL, p_actor_id, 'platform_setting', 'DNI', 'UPDATE',
-       JSON_OBJECT('quota', p_quota, 'alertPct', p_alert_pct, 'cycleDay', p_cycle_day), p_ip);
+       JSON_OBJECT('quota', p_quota, 'alertPct', p_alert_pct, 'cycleDay', p_cycle_day, 'tenantCap', p_tenant_cap, 'userCap', p_user_cap), p_ip);
+END $$
+
+-- Reserva atómica de una consulta ANTES de llamar al proveedor: evita que peticiones en paralelo
+-- superen el cupo. Verifica cupo global, tope mensual por clínica y tope diario por usuario.
+-- Devuelve reason: OK | QUOTA (plataforma) | TENANT_CAP | USER_CAP
+DROP PROCEDURE IF EXISTS sp_dni_reserve $$
+CREATE PROCEDURE sp_dni_reserve(IN p_id CHAR(36), IN p_tenant_id CHAR(36), IN p_user_id CHAR(36), IN p_dni_bidx CHAR(64))
+BEGIN
+  DECLARE v_start, v_end DATETIME;
+  DECLARE v_quota, v_tenant_cap, v_user_cap, v_used, v_tenant_used, v_user_used, v_lock INT;
+  DECLARE v_reason VARCHAR(20) DEFAULT 'OK';
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN DO RELEASE_LOCK('odx_dni_quota'); RESIGNAL; END;
+  SET v_lock = GET_LOCK('odx_dni_quota', 5);
+  IF v_lock IS NULL OR v_lock = 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:RATE_LIMITED'; END IF;
+
+  CALL sp__dni_cycle(0, v_start, v_end);
+  CALL sp__setting_int('DNI_MONTHLY_QUOTA', 100, v_quota);
+  CALL sp__setting_int('DNI_TENANT_MONTHLY_CAP', 0, v_tenant_cap);
+  CALL sp__setting_int('DNI_USER_DAILY_CAP', 30, v_user_cap);
+  SELECT COUNT(*), COALESCE(SUM(tenant_id <=> p_tenant_id), 0) INTO v_used, v_tenant_used
+    FROM dni_lookup WHERE billable = 1 AND deleted_at IS NULL AND created_at >= v_start AND created_at < v_end;
+  SELECT COUNT(*) INTO v_user_used FROM dni_lookup
+   WHERE user_id = p_user_id AND billable = 1 AND deleted_at IS NULL AND created_at >= UTC_TIMESTAMP() - INTERVAL 1 DAY;
+
+  IF v_used >= v_quota THEN SET v_reason = 'QUOTA';
+  ELSEIF v_tenant_cap > 0 AND v_tenant_used >= v_tenant_cap THEN SET v_reason = 'TENANT_CAP';
+  ELSEIF v_user_cap > 0 AND v_user_used >= v_user_cap THEN SET v_reason = 'USER_CAP';
+  ELSE
+    INSERT INTO dni_lookup (id, tenant_id, user_id, dni_bidx, outcome, billable, created_by, updated_by)
+    VALUES (p_id, p_tenant_id, p_user_id, p_dni_bidx, 'PENDING', 1, p_user_id, p_user_id);
+  END IF;
+  DO RELEASE_LOCK('odx_dni_quota');
+  SELECT v_reason AS reason;
+END $$
+
+-- Cierra una consulta reservada con su resultado (las fallidas por red/proveedor no consumen cupo)
+DROP PROCEDURE IF EXISTS sp_dni_lookup_finish $$
+CREATE PROCEDURE sp_dni_lookup_finish(IN p_id CHAR(36), IN p_outcome VARCHAR(20), IN p_billable TINYINT, IN p_http_status SMALLINT)
+BEGIN
+  IF p_outcome NOT IN ('FOUND', 'NOT_FOUND', 'ERROR', 'QUOTA') THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:VALIDATION';
+  END IF;
+  UPDATE dni_lookup SET outcome = p_outcome, billable = p_billable, http_status = p_http_status
+   WHERE id = p_id AND outcome = 'PENDING';
 END $$
 
 DELIMITER ;

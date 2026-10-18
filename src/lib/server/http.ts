@@ -15,6 +15,8 @@ type Opts = {
   allowPending?: boolean;
   allowMfaPending?: boolean;
   limit?: { key: string; max: number; windowMs: number };
+  /** Tamaño máximo del cuerpo en bytes (por defecto 2 MB para JSON y 16 MB para multipart). */
+  maxBody?: number;
 };
 
 type Ctx<P> = {
@@ -36,7 +38,21 @@ function checkOrigin(req: NextRequest) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return;
   const origin = req.headers.get('origin');
   const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
-  if (!origin || !host || new URL(origin).host !== host) throw new AppError('FORBIDDEN', 403, 'Origen no permitido.');
+  let originHost: string | null = null;
+  try { originHost = origin ? new URL(origin).host : null; } catch { /* "null" u origen inválido */ }
+  if (!originHost || !host || originHost !== host) throw new AppError('FORBIDDEN', 403, 'Origen no permitido.');
+}
+
+/** Rechaza cuerpos grandes ANTES de leerlos (evita agotar memoria con peticiones enormes). */
+function checkBodySize(req: NextRequest, max?: number) {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return;
+  const multipart = (req.headers.get('content-type') ?? '').startsWith('multipart/form-data');
+  const limit = max ?? (multipart ? 16 * 1024 * 1024 : 2 * 1024 * 1024);
+  const len = req.headers.get('content-length');
+  // Sin Content-Length (chunked) el middleware ya acota a 16 MB
+  if (len !== null && (!/^\d+$/.test(len) || Number(len) > limit)) {
+    throw new AppError('PAYLOAD_TOO_LARGE', 413, `La solicitud supera el tamaño permitido (${Math.round(limit / 1024 / 1024)} MB).`);
+  }
 }
 
 /** Envoltura estándar de route handlers: auth, permisos, CSRF, rate limit, validación y errores. */
@@ -44,6 +60,7 @@ export function route<P = Record<string, string>>(opts: Opts, fn: (ctx: Ctx<P>) 
   return async (req: NextRequest, context: { params: Promise<P> }) => {
     try {
       checkOrigin(req);
+      checkBodySize(req, opts.maxBody);
       const { ip } = await clientInfo();
       if (opts.limit) rateLimit(`${opts.limit.key}:${ip}`, opts.limit.max, opts.limit.windowMs);
       const user = opts.public ? (null as unknown as SessionUser) : await requireApiSession(opts);
@@ -68,7 +85,8 @@ export function errorResponse(err: unknown) {
       { status: 400 },
     );
   }
-  console.error('[api] error no controlado', err);
+  // Sólo mensaje y pila: nunca el objeto completo (podría arrastrar datos de la petición)
+  console.error('[api] error no controlado', err instanceof Error ? (err.stack ?? err.message) : String(err));
   // Nunca se exponen detalles internos al cliente
   return NextResponse.json({ error: { code: 'INTERNAL', message: 'Ocurrió un error inesperado.' } }, { status: 500 });
 }

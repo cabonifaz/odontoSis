@@ -233,7 +233,8 @@ BEGIN
            updated_by = p_actor_id
      WHERE id = p_id AND tenant_id = p_tenant_id;
   ELSE
-    SELECT p.max_patients INTO v_max FROM tenant t JOIN plan p ON p.id = t.plan_id WHERE t.id = p_tenant_id;
+    -- Bloquea la fila de la clínica: dos altas simultáneas no pueden pasar ambas el límite de pacientes
+    SELECT p.max_patients INTO v_max FROM tenant t JOIN plan p ON p.id = t.plan_id WHERE t.id = p_tenant_id FOR UPDATE OF t;
     SELECT COUNT(*) INTO v_count FROM patient WHERE tenant_id = p_tenant_id AND deleted_at IS NULL;
     IF v_max IS NOT NULL AND v_count >= v_max THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:PLAN_PATIENT_LIMIT'; END IF;
     -- Periodo de implementación: límite de pacientes propio
@@ -248,7 +249,7 @@ BEGIN
                          allergies_enc, medical_history_enc, notes_enc, is_active, requires_guardian, guardian_name,
                          guardian_relationship_id, guardian_doc_type_id, guardian_doc_number_enc, guardian_phone_enc,
                          guardian_email_enc, agreement_id, agreement_member_code, created_by, updated_by)
-    VALUES (p_id, p_tenant_id, LPAD(v_seq, 6, '0'), p_doc_type_id, p_doc_number_enc, p_doc_number_bidx, p_first_name, p_last_name,
+    VALUES (p_id, p_tenant_id, IF(v_seq > 999999, CAST(v_seq AS CHAR), LPAD(v_seq, 6, '0')), p_doc_type_id, p_doc_number_enc, p_doc_number_bidx, p_first_name, p_last_name,
             p_birth_date, p_sex_id, p_phone_enc, p_email_enc, p_address_enc, p_insurance, p_deductible, p_coinsurance,
             p_allergies_enc, p_medical_history_enc, p_notes_enc, p_is_active, v_requires,
             IF(v_requires = 1, TRIM(p_guardian_name), NULL), IF(v_requires = 1, p_guardian_relationship_id, NULL),

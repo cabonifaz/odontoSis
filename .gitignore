@@ -49,3 +49,6 @@ public/swe-worker*
 /test-results/
 /playwright-report/
 /playwright/.auth/
+
+# Scripts temporales locales (pueden usar credenciales de migración)
+scripts/.tmp-*

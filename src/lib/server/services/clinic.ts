@@ -6,6 +6,7 @@ import type {
   AppointmentInput, BudgetInput, PatientInput, agreementSchema, branchSchema, doctorSchema, priceListSchema, masterItemSchema, serviceSchema, tenantSettingsSchema,
 } from '@/lib/shared/schemas';
 import { toDbDateTime } from '@/lib/shared/format';
+import { can } from '@/lib/shared/types';
 
 /** Contexto de toda operación de clínica: tenant + actor + IP (para auditoría). */
 export type Ctx = { tenantId: string; userId: string; ip: string | null };
@@ -175,13 +176,17 @@ export async function tenantDashboard(tenantId: string, dayStart: Date, dayEnd: 
 }
 
 // ---------------- Sincronización offline ----------------
-export async function syncPull(tenantId: string, since: string | null) {
+/** Cada conjunto se entrega sólo si el usuario tiene el permiso de lectura correspondiente. */
+export async function syncPull(tenantId: string, since: string | null, permissions: string[]) {
   const [time, masters, doctors, services, patients, appointments, budgets, agreements, branches, priceLists, priceListItems] =
     await callSp('sp_sync_pull', [tenantId, since]);
+  const allow = (perm: string, rows: Row[]) => (can(permissions, perm) ? rows : []);
   return {
     serverTime: time[0].server_time as string,
-    masters, doctors, services, appointments, budgets, agreements, branches, priceLists, priceListItems,
-    patients: patients.map(({ phone_enc, mobile_enc, guardian_phone_enc, ...p }) => ({
+    masters, doctors, services, agreements, branches, priceLists, priceListItems,
+    appointments: allow('appointments.read', appointments),
+    budgets: allow('budgets.read', budgets),
+    patients: allow('patients.read', patients).map(({ phone_enc, mobile_enc, guardian_phone_enc, ...p }) => ({
       ...p, phone: decrypt(mobile_enc) ?? decrypt(phone_enc), guardian_phone: decrypt(guardian_phone_enc),
     })),
   };

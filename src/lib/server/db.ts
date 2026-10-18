@@ -57,7 +57,7 @@ export async function callSp(name: string, params: Param[] = []): Promise<Row[][
       ? (result as unknown[]).filter((r): r is RowDataPacket[] => Array.isArray(r)).map((r) => r as Row[])
       : [];
   } catch (err) {
-    throw AppError.fromDb(err);
+    throw AppError.fromDb(err, name);
   }
 }
 

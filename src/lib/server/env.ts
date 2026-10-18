@@ -34,6 +34,9 @@ export function env() {
       const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n');
       throw new Error(`Configuración inválida:\n${issues}`);
     }
+    if (parsed.data.DATA_ENCRYPTION_KEY === parsed.data.BLIND_INDEX_KEY) {
+      throw new Error('Configuración inválida: DATA_ENCRYPTION_KEY y BLIND_INDEX_KEY deben ser distintas');
+    }
     cached = parsed.data;
   }
   return cached;

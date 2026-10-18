@@ -1,9 +1,18 @@
+import { z } from 'zod';
 import { route } from '@/lib/server/http';
+import { AppError } from '@/lib/server/errors';
 import { dniLookupEnabled, lookupDni } from '@/lib/server/services/identity';
+import { can } from '@/lib/shared/types';
 
-/** Datos personales por DNI (RENIEC) para evitar errores de digitación. Requiere sesión; con límite de uso y cupo mensual. */
-export const GET = route({ limit: { key: 'dni', max: 60, windowMs: 60_000 } }, async ({ req, user }) => {
-  const n = req.nextUrl.searchParams.get('numero') ?? '';
-  if (req.nextUrl.searchParams.get('check') === '1') return { enabled: dniLookupEnabled() };
-  return lookupDni(n.trim(), { userId: user.userId, tenantId: user.tenant?.id ?? null });
+/** ¿Está configurada la consulta? (sin costo) */
+export const GET = route({ platform: false }, async () => ({ enabled: dniLookupEnabled() }));
+
+/**
+ * Datos personales por DNI (RENIEC) para evitar errores de digitación. Consume cupo pagado, por eso:
+ * POST (no se dispara con un enlace), sólo quien registra personas (pacientes, doctores o usuarios) y límites por IP/usuario.
+ */
+export const POST = route({ platform: false, limit: { key: 'dni', max: 20, windowMs: 60_000 } }, async ({ user, body }) => {
+  if (!['patients.write', 'doctors.write', 'users.manage'].some((p) => can(user.permissions, p))) throw new AppError('FORBIDDEN');
+  const { numero } = await body(z.object({ numero: z.string().trim().regex(/^\d{8}$/, 'El DNI debe tener 8 dígitos') }));
+  return lookupDni(numero, { userId: user.userId, tenantId: user.tenant?.id ?? null });
 });

@@ -3,14 +3,15 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import {
-  AlertTriangle, ArrowLeft, CalendarPlus, Copy, CreditCard, FileSignature, FileText, ImageOff, KeyRound, Pencil, Plus, Trash2, Upload, UserPlus, Users,
+  AlertTriangle, ArrowLeft, CalendarPlus, Copy, CreditCard, FileSignature, FileText, ImageOff, KeyRound, Pencil, Plus, ShieldOff, Trash2, Upload, UserPlus, Users,
 } from 'lucide-react';
 import { ContractUpload } from '../../_components/contract-upload';
-import { PhaseBadge } from '../../_components/tenant-phase';
+import { PhaseBadge, computeAccess } from '../../_components/tenant-phase';
 import { TimezonePicker } from '@/components/timezone-picker';
 import { DocumentUpload, type UploadedFile } from '@/components/file-upload';
 import { TenantLoginLink } from '@/components/tenant-login-link';
 import { BranchesTab } from '@/components/settings/branches-tab';
+import { BulkImportPanel } from '@/components/import/bulk-import-panel';
 import {
   Badge, Button, Card, Checkbox, EmptyState, Field, Input, Modal, PageHeader, Select, Spinner, Table, Tabs, Td, Textarea, Th, cx,
 } from '@/components/ui';
@@ -36,7 +37,7 @@ type Extension = { id: string; created_at: string; actor_name: string | null; pr
 type Plan = { id: string; name: string; max_users: number; price: number; currency_code: string; billing_period_code: string; is_active: number | boolean };
 type UserRow = {
   id: string; email: string; full_name: string; is_active: number | boolean; must_change_password: number | boolean;
-  last_login_at: string | null; locked_until: string | null; role_code: string; role_name: string;
+  last_login_at: string | null; locked_until: string | null; role_code: string; role_name: string; totp_enabled?: number | boolean;
 };
 type Role = { id: string; code: string; name: string };
 type Usage = { plan_name: string; max_users: number; active_users: number } | null;
@@ -72,7 +73,7 @@ const errMsg = (e: unknown, fallback: string) => (e instanceof ApiError ? e.mess
 const truthy = (v: number | boolean | null | undefined) => Number(v) === 1 || v === true;
 const symbolFor = (cur: string) => (cur === 'USD' ? '$' : 'S/');
 
-type Tab = 'datos' | 'contratos' | 'sedes' | 'marca' | 'usuarios' | 'pagos';
+type Tab = 'datos' | 'contratos' | 'sedes' | 'marca' | 'usuarios' | 'pagos' | 'carga';
 
 export default function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -107,6 +108,7 @@ export default function TenantDetailPage() {
     );
   }
   if (!tenant) return <Spinner />;
+  const inImplementation = computeAccess(tenant).phase === 'IMPLEMENTATION';
 
   return (
     <>
@@ -118,6 +120,8 @@ export default function TenantDetailPage() {
       <Tabs<Tab> value={tab} onChange={setTab} tabs={[
         { value: 'datos', label: 'Datos' }, { value: 'contratos', label: `Contratos (${Number(tenant.contract_count) || 0})` },
         { value: 'sedes', label: 'Sedes' }, { value: 'marca', label: 'Marca' }, { value: 'usuarios', label: 'Usuarios' }, { value: 'pagos', label: 'Pagos' },
+        // Carga masiva: sólo mientras la clínica está en implementación
+        ...(inImplementation ? [{ value: 'carga' as const, label: 'Carga masiva' }] : []),
       ]} />
       {tab === 'datos' && (
         <div className="space-y-6">
@@ -132,6 +136,7 @@ export default function TenantDetailPage() {
       {tab === 'usuarios' && <UsersTab tenantId={tenant.id} onChanged={loadTenant} />}
       {tab === 'pagos' && <PaymentsTab tenant={tenant} plans={plans} onChanged={loadTenant} />}
       {tab === 'sedes' && <BranchesTab endpoint={`/api/admin/tenants/${tenant.id}/branches`} />}
+      {tab === 'carga' && inImplementation && <BulkImportPanel base={`/api/admin/tenants/${tenant.id}/import`} />}
     </>
   );
 }
@@ -697,7 +702,7 @@ function UsersTab({ tenantId, onChanged }: { tenantId: string; onChanged: () => 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [temp, setTemp] = useState<{ email: string; tempPassword: string } | null>(null);
-  const [confirm, setConfirm] = useState<{ kind: 'reset' | 'delete'; user: UserRow } | null>(null);
+  const [confirm, setConfirm] = useState<{ kind: 'reset' | 'delete' | 'mfa'; user: UserRow } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -765,6 +770,10 @@ function UsersTab({ tenantId, onChanged }: { tenantId: string; onChanged: () => 
         const r = await api<{ tempPassword: string }>(`/api/admin/tenants/${tenantId}/users/${confirm.user.id}/reset-password`, { method: 'POST' });
         setTemp({ email: confirm.user.email, tempPassword: r.tempPassword });
         toast.success('Contraseña restablecida.');
+      } else if (confirm.kind === 'mfa') {
+        await api(`/api/admin/tenants/${tenantId}/users/${confirm.user.id}/reset-mfa`, { method: 'POST' });
+        toast.success('2FA restablecido.');
+        await load();
       } else {
         await api(`/api/admin/tenants/${tenantId}/users/${confirm.user.id}`, { method: 'DELETE' });
         toast.success('Usuario eliminado.');
@@ -824,6 +833,8 @@ function UsersTab({ tenantId, onChanged }: { tenantId: string; onChanged: () => 
                       <Button variant="ghost" size="sm" aria-label={`Editar ${u.full_name}`} title="Editar" onClick={() => openEdit(u)}><Pencil className="size-4" /></Button>
                       <Button variant="ghost" size="sm" aria-label={`Restablecer contraseña de ${u.full_name}`} title="Restablecer contraseña"
                         onClick={() => setConfirm({ kind: 'reset', user: u })}><KeyRound className="size-4" /></Button>
+                      {!!u.totp_enabled && <Button variant="ghost" size="sm" aria-label={`Restablecer 2FA de ${u.full_name}`} title="Restablecer 2FA"
+                        onClick={() => setConfirm({ kind: 'mfa', user: u })}><ShieldOff className="size-4" /></Button>}
                       <Button variant="ghost" size="sm" aria-label={`Eliminar ${u.full_name}`} title="Eliminar" className="text-danger"
                         onClick={() => setConfirm({ kind: 'delete', user: u })}><Trash2 className="size-4" /></Button>
                     </div>
@@ -859,6 +870,10 @@ function UsersTab({ tenantId, onChanged }: { tenantId: string; onChanged: () => 
       <ConfirmModal open={confirm?.kind === 'reset'} title="Restablecer contraseña" confirmLabel="Restablecer" loading={busy}
         onConfirm={runConfirm} onClose={() => setConfirm(null)}>
         Se generará una nueva contraseña temporal para <strong>{confirm?.user.full_name}</strong> y deberá cambiarla en su próximo ingreso. ¿Continuar?
+      </ConfirmModal>
+      <ConfirmModal open={confirm?.kind === 'mfa'} title="Restablecer 2FA" confirmLabel="Restablecer" loading={busy}
+        onConfirm={runConfirm} onClose={() => setConfirm(null)}>
+        Se desactivará la verificación en dos pasos de <strong>{confirm?.user.full_name}</strong> y se cerrarán sus sesiones. Úsalo sólo si perdió su autenticador.
       </ConfirmModal>
       <ConfirmModal open={confirm?.kind === 'delete'} title="Eliminar usuario" confirmLabel="Eliminar" danger loading={busy}
         onConfirm={runConfirm} onClose={() => setConfirm(null)}>

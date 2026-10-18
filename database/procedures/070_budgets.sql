@@ -145,6 +145,10 @@ BEGIN
   END IF;
   SELECT tenant_id INTO v_owner FROM budget WHERE id = p_id;
   IF v_owner IS NOT NULL AND v_owner <> p_tenant_id THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:NOT_FOUND'; END IF;
+  -- Sin permiso de edición sólo se crean borradores: no se puede emitir un presupuesto ya aprobado
+  IF v_owner IS NULL AND COALESCE(p_can_edit, 0) = 0 AND p_status_code <> 'DRAFT' THEN
+    CALL sp__master_id('BUDGET_STATUS', 'DRAFT', p_tenant_id, v_status);
+  END IF;
   -- Crear requiere budgets.write (validado en la app); modificar uno existente requiere budgets.edit
   IF v_owner IS NOT NULL AND COALESCE(p_can_edit, 0) = 0 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:BUDGET_EDIT_FORBIDDEN';

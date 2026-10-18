@@ -5,6 +5,7 @@ const MESSAGES: Record<string, [number, string]> = {
   UNAUTHORIZED: [401, 'Tu sesión expiró. Vuelve a iniciar sesión.'],
   VALIDATION: [400, 'Revisa los datos ingresados.'],
   RATE_LIMITED: [429, 'Demasiados intentos. Espera unos minutos.'],
+  PAYLOAD_TOO_LARGE: [413, 'La solicitud supera el tamaño permitido.'],
   INVALID_CREDENTIALS: [401, 'Correo o contraseña incorrectos.'],
   ACCOUNT_LOCKED: [423, 'Cuenta bloqueada temporalmente por intentos fallidos.'],
   TENANT_INACTIVE: [403, 'La clínica está suspendida. Contacta al administrador de la plataforma.'],
@@ -27,6 +28,8 @@ const MESSAGES: Record<string, [number, string]> = {
   CANNOT_DISABLE_SELF: [400, 'No puedes desactivar tu propio usuario.'],
   CANNOT_DELETE_SELF: [400, 'No puedes eliminar tu propio usuario.'],
   USER_NOT_FOUND: [400, 'Usuario no encontrado.'],
+  CANNOT_RESET_OWN_MFA: [400, 'No puedes restablecer tu propio doble factor. Pídeselo a otro administrador.'],
+  LAST_ADMIN: [409, 'La clínica debe conservar al menos un administrador activo.'],
   USER_ALREADY_LINKED: [409, 'Ese usuario ya está vinculado a otro doctor.'],
   PATIENT_DOC_TAKEN: [409, 'Ya existe un paciente con ese documento.'],
   PATIENT_NOT_FOUND: [400, 'Paciente no encontrado.'],
@@ -65,6 +68,8 @@ const MESSAGES: Record<string, [number, string]> = {
   DNI_LOOKUP_DISABLED: [503, 'La consulta de DNI no está configurada. Ingresa los datos manualmente.'],
   DNI_NOT_FOUND: [404, 'No se encontraron datos para ese DNI.'],
   DNI_LOOKUP_FAILED: [502, 'No se pudo consultar el DNI en este momento. Ingresa los datos manualmente.'],
+  TOO_MANY_ATTACHMENTS: [400, 'Puedes adjuntar hasta 5 imágenes por solicitud.'],
+  INVALID_ATTACHMENT: [400, 'Una de las imágenes adjuntas no es válida. Vuelve a adjuntarla.'],
   DNI_QUOTA_EXCEEDED: [429, 'Se agotó el cupo mensual de consultas de DNI. Ingresa los datos manualmente.'],
   REFERRAL_TARGET_REQUIRED: [400, 'Indica el especialista o clínica de destino, o el doctor de la clínica si la derivación es interna.'],
   BUDGET_NOT_FOUND: [400, 'Presupuesto no encontrado o no pertenece al paciente.'],
@@ -73,6 +78,16 @@ const MESSAGES: Record<string, [number, string]> = {
   ORTHO_INVALID_INSTALLMENTS: [400, 'El número de cuotas debe estar entre 1 y 120.'],
   GUARDIAN_REQUIRED: [400, 'El paciente es menor de edad o requiere apoderado: ingresa el nombre y parentesco del apoderado.'],
   PAYMENT_DOCS_REQUIRED: [400, 'Para un pago “Pagado” adjunta la factura emitida (con su número) y el comprobante o evidencia de pago.'],
+  IMPORT_NOT_AVAILABLE: [403, 'La carga masiva sólo está disponible mientras la clínica está en su periodo de implementación.'],
+  IMPORT_INVALID_FILE: [400, 'Archivo no válido. Sube la plantilla en Excel (.xlsx) o un CSV (UTF-8) de hasta 10 MB.'],
+  IMPORT_EMPTY: [400, 'El archivo no tiene filas para importar.'],
+  IMPORT_TOO_MANY_ROWS: [400, 'El archivo supera el máximo de 10 000 filas. Divídelo en varios archivos.'],
+  IMPORT_NOTHING_VALID: [400, 'Ninguna fila es válida. Corrige los errores y vuelve a subir el archivo.'],
+  RECORD_NUMBER_TAKEN: [409, 'El N° de historia clínica ya pertenece a otro paciente.'],
+  IMPORT_TOO_MANY_COLUMNS: [400, 'El archivo tiene demasiadas columnas. Usa la plantilla sin agregar columnas.'],
+  IMPORT_BUSY: [429, 'Ya hay una importación en curso para esta clínica. Espera a que termine e inténtalo de nuevo.'],
+  IMPORT_BUDGET_ISSUED: [409, 'El presupuesto ya fue emitido (no es borrador): no se modifica.'],
+  IMPORT_SERVER_BUSY: [429, 'Ya hay otras importaciones en curso en el servidor. Inténtalo en unos minutos.'],
 };
 
 export class AppError extends Error {
@@ -80,11 +95,17 @@ export class AppError extends Error {
     super(message ?? MESSAGES[code]?.[1] ?? 'Ocurrió un error inesperado.');
   }
 
-  static fromDb(err: unknown): Error {
-    const e = err as { sqlState?: string; sqlMessage?: string };
+  /**
+   * Traduce errores de BD. Los no controlados se reemplazan por un error SIN la sentencia ni los valores
+   * (mysql2 adjunta la consulta interpolada: datos de pacientes, hashes...), para que no lleguen a los logs.
+   */
+  static fromDb(err: unknown, procedure = 'sp'): Error {
+    const e = err as { sqlState?: string; sqlMessage?: string; code?: string; errno?: number };
     if (e?.sqlState === '45000' && e.sqlMessage?.startsWith('APP:')) {
       return new AppError(e.sqlMessage.slice(4));
     }
-    return err instanceof Error ? err : new Error(String(err));
+    const safe = new Error(`[db] ${procedure}: ${e?.code ?? 'ERROR'} (errno ${e?.errno ?? '?'}, sqlState ${e?.sqlState ?? '?'})`);
+    (safe as Error & { code?: string }).code = e?.code;
+    return safe;
   }
 }

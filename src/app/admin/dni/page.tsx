@@ -7,7 +7,7 @@ import { api, ApiError, fieldErrors } from '@/lib/client/api';
 import { formatDate, formatDateTime, parseDbDate } from '@/lib/shared/format';
 import { DniAlert, DniMeter, dniProjection, type DniUsage } from '../_components/dni-usage';
 
-type Form = { quota: string; alertPct: string; cycleDay: string };
+type Form = { quota: string; alertPct: string; cycleDay: string; tenantCap: string; userCap: string };
 
 /** Control del cupo mensual de la consulta de DNI (plan del proveedor) para ampliar el plan a tiempo. */
 export default function DniUsagePage() {
@@ -40,7 +40,7 @@ export default function DniUsagePage() {
     <>
       <PageHeader title="Consultas de DNI" subtitle="Consumo del plan contratado con Decolecta (RENIEC)"
         actions={<Button variant="secondary" icon={<Settings2 className="size-4" />}
-          onClick={() => { setErrors({}); setForm({ quota: String(s.quota), alertPct: String(s.alert_pct), cycleDay: String(s.cycle_day) }); }}>Plan contratado</Button>} />
+          onClick={() => { setErrors({}); setForm({ quota: String(s.quota), alertPct: String(s.alert_pct), cycleDay: String(s.cycle_day), tenantCap: String(s.tenant_cap ?? 0), userCap: String(s.user_cap ?? 30) }); }}>Plan contratado</Button>} />
       {!u.enabled && <p className="mb-4 rounded-card border border-line bg-surface-2 p-4 text-sm text-muted">La consulta de DNI no está configurada en este ambiente (falta DNI_API_TOKEN).</p>}
       <div className="mb-4"><DniAlert u={u} /></div>
 
@@ -104,6 +104,8 @@ export default function DniUsagePage() {
             <Input label="Consultas por mes" required type="number" min={0} value={form.quota} onChange={(e) => setForm({ ...form, quota: e.target.value })} error={errors.quota} hint="Según el plan de Decolecta" />
             <Input label="Alertar al (%)" required type="number" min={1} max={100} value={form.alertPct} onChange={(e) => setForm({ ...form, alertPct: e.target.value })} error={errors.alertPct} />
             <Input label="Día de renovación" required type="number" min={1} max={28} value={form.cycleDay} onChange={(e) => setForm({ ...form, cycleDay: e.target.value })} error={errors.cycleDay} />
+            <Input label="Tope por clínica / mes" type="number" min={0} value={form.tenantCap} onChange={(e) => setForm({ ...form, tenantCap: e.target.value })} error={errors.tenantCap} hint="0 = sin tope" />
+            <Input label="Tope por usuario / día" type="number" min={0} value={form.userCap} onChange={(e) => setForm({ ...form, userCap: e.target.value })} error={errors.userCap} hint="Evita que una sola persona agote el cupo" />
             <p className="text-xs text-muted sm:col-span-3">Al llegar al cupo, la app deja de consultar al proveedor y los usuarios ingresan los datos manualmente. Las consultas repetidas del mismo DNI en 24 h no consumen cupo.</p>
           </div>
         )}
