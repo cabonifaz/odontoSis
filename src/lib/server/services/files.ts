@@ -32,6 +32,19 @@ const SIGNATURES: { mime: string; ext: string; test: (b: Buffer) => boolean }[] 
 
 const root = () => resolve(env().UPLOAD_DIR);
 
+/** Lee el binario; si el registro existe pero el archivo no está en el volumen, responde 404 (no 500) */
+async function readStored(full: string) {
+  try {
+    return await readFile(full);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+      console.warn('[files] registro sin binario en el volumen');
+      throw new AppError('NOT_FOUND');
+    }
+    throw e;
+  }
+}
+
 export async function saveUpload(opts: { tenantId: string | null; actorId: string; ip: string | null; kind: FileKind; file: File }) {
   const limit = LIMITS[opts.kind];
   const mb = limit.maxBytes / 1024 / 1024;
@@ -67,7 +80,7 @@ export async function readPublicLogo(code: string) {
   if (!f) throw new AppError('NOT_FOUND');
   const full = resolve(root(), f.storage_key);
   if (!full.startsWith(root() + sep)) throw new AppError('NOT_FOUND');
-  return { data: await readFile(full), mime: f.mime_type, etag: f.sha256 };
+  return { data: await readStored(full), mime: f.mime_type, etag: f.sha256 };
 }
 
 export async function readUpload(id: string, tenantId: string | null, isPlatform: boolean, permissions: string[] = []) {
@@ -77,5 +90,5 @@ export async function readUpload(id: string, tenantId: string | null, isPlatform
   if (!isPlatform && f.kind === 'PATIENT_FILE' && !can(permissions, 'patients.read')) throw new AppError('NOT_FOUND');
   const full = resolve(root(), f.storage_key);
   if (!full.startsWith(root() + sep)) throw new AppError('NOT_FOUND'); // defensa ante path traversal
-  return { data: await readFile(full), mime: f.mime_type, etag: f.sha256, name: f.original_name };
+  return { data: await readStored(full), mime: f.mime_type, etag: f.sha256, name: f.original_name };
 }

@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ExternalLink, ImagePlus, Loader2, X } from 'lucide-react';
+import { ExternalLink, ImageOff, ImagePlus, Loader2, X } from 'lucide-react';
 import { cx, Modal } from '@/components/ui';
 import { api, ApiError } from '@/lib/client/api';
 
@@ -141,6 +141,9 @@ export function ImageAttachments({ value, onChange, max = 5, onBusyChange }: {
 /** Miniaturas de capturas adjuntas con vista ampliada. */
 export function AttachmentThumbs({ files, size = 64 }: { files: Attachment[] | null | undefined; size?: number }) {
   const [open, setOpen] = useState<Attachment | null>(null);
+  // Capturas cuyo archivo no se pudo cargar (p. ej. el binario ya no está en el servidor)
+  const [broken, setBroken] = useState<Set<string>>(new Set());
+  const markBroken = (id: string) => setBroken((b) => (b.has(id) ? b : new Set(b).add(id)));
   if (!files?.length) return null;
   return (
     <>
@@ -150,8 +153,12 @@ export function AttachmentThumbs({ files, size = 64 }: { files: Attachment[] | n
             <button type="button" onClick={() => setOpen(f)} aria-label={`Ver captura ${f.name}`}
               className="block overflow-hidden rounded-control border border-line bg-surface-2 hover:border-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               style={{ width: size, height: size }}>
-              {/* eslint-disable-next-line @next/next/no-img-element -- archivo privado servido por la API */}
-              <img src={fileUrl(f.id)} alt={f.name} loading="lazy" className="size-full object-cover" />
+              {broken.has(f.id) ? (
+                <span className="grid size-full place-items-center text-subtle" title="Imagen no disponible"><ImageOff className="size-5" aria-hidden /></span>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element -- archivo privado servido por la API
+                <img src={fileUrl(f.id)} alt={f.name} loading="lazy" className="size-full object-cover" onError={() => markBroken(f.id)} />
+              )}
             </button>
           </li>
         ))}
@@ -165,8 +172,16 @@ export function AttachmentThumbs({ files, size = 64 }: { files: Attachment[] | n
         )}>
         {open && (
           <div className="grid place-items-center">
-            {/* eslint-disable-next-line @next/next/no-img-element -- archivo privado servido por la API */}
-            <img src={fileUrl(open.id)} alt={open.name} className="max-h-[70dvh] w-auto object-contain" />
+            {broken.has(open.id) ? (
+              <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted">
+                <ImageOff className="size-8" aria-hidden />
+                <p className="font-medium text-fg">Imagen no disponible</p>
+                <p>El archivo ya no está en el servidor. Pide a la clínica que vuelva a adjuntar la captura.</p>
+              </div>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element -- archivo privado servido por la API
+              <img src={fileUrl(open.id)} alt={open.name} className="max-h-[70dvh] w-auto object-contain" onError={() => markBroken(open.id)} />
+            )}
           </div>
         )}
       </Modal>
