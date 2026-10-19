@@ -12,6 +12,7 @@ import { ConditionPalette, toggleMark } from '@/components/odontogram/condition-
 import { budgetSchema, type BudgetInput } from '@/lib/shared/schemas';
 import { formatMoney, todayIn, toDbDateTime } from '@/lib/shared/format';
 import type { LService } from '@/lib/client/offline-db';
+import { StepBadge } from '@/components/help/tour';
 
 type Item = BudgetInput['items'][number];
 const SURFACE_ORDER: Surface[] = ['O', 'V', 'L', 'M', 'D'];
@@ -143,9 +144,10 @@ export function BudgetEditor({ initial, onSaved, onCancel }: { initial: BudgetDr
 
   return (
     <div className="space-y-6">
-      <Card className="p-5">
+      <Card className="p-5" data-tour="budget-header">
+        <h2 className="mb-4 flex items-center gap-2 font-semibold"><StepBadge n={1} /> Paciente y datos del presupuesto</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <div className="md:col-span-2">
+          <div className="md:col-span-2" data-tour="patient">
             <PatientPicker value={b.patientId || null} required error={errors.patientId ? 'Selecciona un paciente' : null}
               onChange={(p) => recalc({
                 patientId: p?.id ?? '',
@@ -157,14 +159,14 @@ export function BudgetEditor({ initial, onSaved, onCancel }: { initial: BudgetDr
                 priceListId: p?.price_list_id ?? null,
               })} />
           </div>
-          <Select label="Doctor tratante" value={b.doctorId ?? ''} onChange={(e) => patch({ doctorId: e.target.value || null })} placeholder="—"
-            options={doctors.map((d) => ({ value: d.id, label: `${d.first_name} ${d.last_name}` }))} />
-          <Input label="Fecha" type="date" value={b.budgetDate} onChange={(e) => patch({ budgetDate: e.target.value })} />
+          <div data-tour="doctor"><Select label="Doctor tratante" value={b.doctorId ?? ''} onChange={(e) => patch({ doctorId: e.target.value || null })} placeholder="—"
+            options={doctors.map((d) => ({ value: d.id, label: `${d.first_name} ${d.last_name}` }))} /></div>
+          <div data-tour="date"><Input label="Fecha" type="date" value={b.budgetDate} onChange={(e) => patch({ budgetDate: e.target.value })} /></div>
           {branches.length > 1 && (
             <Select label="Sede" value={b.branchId ?? branches[0]?.id ?? ''} onChange={(e) => patch({ branchId: e.target.value || null })}
               options={branches.map((s) => ({ value: s.id, label: s.name }))} />
           )}
-          <Input label="Compañía de seguros" value={b.insuranceCompany ?? ''} placeholder="Particular" onChange={(e) => recalc({ insuranceCompany: e.target.value || null })} />
+          <div data-tour="insurance"><Input label="Compañía de seguros" value={b.insuranceCompany ?? ''} placeholder="Particular (sin seguro)" onChange={(e) => recalc({ insuranceCompany: e.target.value || null })} /></div>
           <Input label="Deducible por pieza" type="number" min="0" step="0.01" value={b.deductible} disabled={!b.insuranceCompany} onChange={(e) => recalc({ deductible: Number(e.target.value) || 0 })} />
           <Input label="Coaseguro %" type="number" min="0" max="100" step="0.01" value={b.coinsurancePct} disabled={!b.insuranceCompany} onChange={(e) => recalc({ coinsurancePct: Number(e.target.value) || 0 })} />
           {priceLists.length > 1 && (
@@ -172,30 +174,30 @@ export function BudgetEditor({ initial, onSaved, onCancel }: { initial: BudgetDr
               hint="Los tratamientos nuevos toman el precio de este tarifario"
               options={priceLists.map((l) => ({ value: l.id, label: `${l.group_name ? `${l.group_name} · ` : ''}${l.name}` }))} />
           )}
-          <Select label="Convenio" value={b.agreementId ?? ''} onChange={(e) => recalc({ agreementId: e.target.value || null })} placeholder="Sin convenio"
+          <div data-tour="agreement"><Select label="Convenio" value={b.agreementId ?? ''} onChange={(e) => recalc({ agreementId: e.target.value || null })} placeholder="Sin convenio"
             hint={agreement ? `Descuento de ${pct} % sobre la lista de precios` : undefined}
-            options={agreements.map((a) => ({ value: a.id, label: `${a.name} (${Number(a.discount_pct)} %)` }))} />
-          <Select label="Estado" value={b.statusCode} onChange={(e) => patch({ statusCode: e.target.value as BudgetDraft['statusCode'] })}
-            options={statuses.map((s) => ({ value: s.code, label: s.name }))} />
+            options={agreements.map((a) => ({ value: a.id, label: `${a.name} (${Number(a.discount_pct)} %)` }))} /></div>
+          <div data-tour="status"><Select label="Estado" value={b.statusCode} onChange={(e) => patch({ statusCode: e.target.value as BudgetDraft['statusCode'] })}
+            options={statuses.map((s) => ({ value: s.code, label: s.name }))} /></div>
         </div>
       </Card>
 
       <Card className="p-4 sm:p-5">
         <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <h2 className="font-semibold">Odontograma</h2>
-          <ConditionPalette conditions={conditions} value={tool} allowSelect onChange={(v) => { setTool(v); setSel(null); }} />
+          <h2 className="flex items-center gap-2 font-semibold"><StepBadge n={2} /> Odontograma: elige la pieza y el tratamiento</h2>
+          <div data-tour="palette"><ConditionPalette conditions={conditions} value={tool} allowSelect onChange={(v) => { setTool(v); setSel(null); }} /></div>
         </div>
-        <div className="overflow-x-auto rounded-lg border border-line bg-surface p-2">
+        <div className="overflow-x-auto rounded-lg border border-line bg-surface p-2" data-tour="odontogram">
           <Odontogram marks={b.marks} conditions={conditions} selection={sel} planned={planned} onSurfaceClick={onSurface} onToothClick={onTooth} />
         </div>
         <div className="mt-3"><OdontogramLegend conditions={conditions} /></div>
 
-        <div className="mt-4 rounded-lg border border-dashed border-line-strong bg-surface-2 p-4">
+        <div className="mt-4 rounded-lg border border-dashed border-line-strong bg-surface-2 p-4" data-tour="add-treatment">
           {tool ? (
             <p className="text-sm text-muted">Modo hallazgos: haz clic en una superficie (o en el número de la pieza para hallazgos de pieza completa). Elige <strong>Seleccionar pieza</strong> para agregar tratamientos.</p>
           ) : (
             <div className="grid items-end gap-3 md:grid-cols-[auto_1fr_auto]">
-              <div className="text-sm">
+              <div className="text-sm" data-tour="selection">
                 <p className="text-muted">Pieza / superficies</p>
                 {sel ? (
                   <p className="mt-1 flex items-center gap-2 font-semibold">
@@ -204,8 +206,8 @@ export function BudgetEditor({ initial, onSaved, onCancel }: { initial: BudgetDr
                   </p>
                 ) : <p className="mt-1 text-muted">Selecciona en el odontograma</p>}
               </div>
-              <ServicePicker value={service?.id ?? null} onChange={setService} symbol={symbol} />
-              <div className="flex gap-2">
+              <div data-tour="service"><ServicePicker value={service?.id ?? null} onChange={setService} symbol={symbol} /></div>
+              <div className="flex gap-2" data-tour="add-buttons">
                 <Button icon={<Plus className="size-4" />} disabled={!service || !sel} onClick={() => addItem(false)}>Agregar a pieza</Button>
                 <Button variant="secondary" disabled={!service} onClick={() => addItem(true)}>General</Button>
               </div>
@@ -214,9 +216,9 @@ export function BudgetEditor({ initial, onSaved, onCancel }: { initial: BudgetDr
         </div>
       </Card>
 
-      <Card>
+      <Card data-tour="items">
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <h2 className="font-semibold">Tratamientos</h2>
+          <h2 className="flex items-center gap-2 font-semibold"><StepBadge n={3} /> Tratamientos y total</h2>
           {errors.items && <p className="text-sm text-danger">{errors.items}</p>}
         </div>
         {b.items.length === 0 ? (
@@ -254,7 +256,7 @@ export function BudgetEditor({ initial, onSaved, onCancel }: { initial: BudgetDr
         )}
         <div className="grid gap-4 p-5 md:grid-cols-[1fr_320px]">
           <Textarea label="Observaciones" value={b.notes ?? ''} onChange={(e) => patch({ notes: e.target.value || null })} />
-          <dl className="space-y-2 text-sm">
+          <dl className="space-y-2 text-sm" data-tour="totals">
             {pct > 0 && (
               <div className="flex justify-between text-success"><dt>Ahorro por convenio ({pct} %)</dt>
                 <dd className="tabular-nums">- {formatMoney(b.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0) - totals.subtotal, symbol)}</dd></div>
@@ -270,9 +272,10 @@ export function BudgetEditor({ initial, onSaved, onCancel }: { initial: BudgetDr
         </div>
       </Card>
 
-      <div className="sticky bottom-0 z-10 -mx-4 flex justify-end gap-2 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur lg:-mx-8 lg:px-8">
+      <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-end gap-2 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur lg:-mx-8 lg:px-8">
+        <p className="mr-auto hidden items-center gap-2 text-sm text-muted sm:flex"><StepBadge n={4} /> Revisa el total y guarda</p>
         <Button variant="secondary" onClick={onCancel}>Cancelar</Button>
-        <Button onClick={save} loading={saving}>Guardar presupuesto</Button>
+        <span data-tour="save"><Button onClick={save} loading={saving}>Guardar presupuesto</Button></span>
       </div>
     </div>
   );

@@ -9,6 +9,8 @@ import { api, ApiError } from '@/lib/client/api';
 import { BudgetEditor, type BudgetDraft } from '@/components/budgets/budget-editor';
 import { BudgetDocument } from '@/components/budgets/budget-document';
 import type { BudgetDetail } from '@/components/budgets/budget-types';
+import { HelpButton, Tour, useTour } from '@/components/help/tour';
+import { BUDGET_DETAIL_TOUR, BUDGET_EDITOR_TOUR } from '@/components/help/budget-tours';
 
 export default function BudgetPage() {
   const { id } = useParams<{ id: string }>();
@@ -21,6 +23,8 @@ export default function BudgetPage() {
   const [editing, setEditing] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const writable = can(session, 'budgets.edit');
+  const detailTour = useTour('budget-detail', session.userId, !!b && !editing);
+  const editorTour = useTour('budget-editor', session.userId, false);
 
   const load = useCallback(() => {
     api<BudgetDetail>(`/api/budgets/${id}`).then((r) => { setB(r); setOffline(false); })
@@ -49,7 +53,8 @@ export default function BudgetPage() {
     };
     return (
       <>
-        <PageHeader title={`Editar presupuesto N° ${b.budget_number}`} />
+        <PageHeader title={`Editar presupuesto N° ${b.budget_number}`} actions={<HelpButton onClick={editorTour.start} />} />
+        <Tour steps={BUDGET_EDITOR_TOUR} open={editorTour.open} onClose={editorTour.close} />
         <BudgetEditor initial={draft} onSaved={() => { setEditing(false); load(); }} onCancel={() => setEditing(false)} />
       </>
     );
@@ -78,13 +83,15 @@ export default function BudgetPage() {
       <div className="no-print">
         <PageHeader title={`Presupuesto N° ${b.budget_number}`} subtitle={`${b.patient_last_name}, ${b.patient_first_name} · H.C. ${b.record_number}`}
           actions={<>
-            {writable && <Select aria-label="Estado" value={b.status_code} onChange={(e) => setStatus(e.target.value)} options={statuses.map((s) => ({ value: s.code, label: s.name }))} className="w-40" />}
-            <Button variant="secondary" icon={<Printer className="size-4" />} onClick={() => window.print()}>Imprimir / PDF</Button>
-            {writable && <Button variant="secondary" icon={<Pencil className="size-4" />} onClick={() => setEditing(true)}>Editar</Button>}
+            <HelpButton onClick={detailTour.start} />
+            {writable && <div data-tour="budget-status"><Select aria-label="Estado" value={b.status_code} onChange={(e) => setStatus(e.target.value)} options={statuses.map((s) => ({ value: s.code, label: s.name }))} className="w-40" /></div>}
+            <span data-tour="budget-print"><Button variant="secondary" icon={<Printer className="size-4" />} onClick={() => window.print()}>Imprimir / PDF</Button></span>
+            {writable && <span data-tour="budget-edit"><Button variant="secondary" icon={<Pencil className="size-4" />} onClick={() => setEditing(true)}>Editar</Button></span>}
             {writable && <Button variant="ghost" className="text-danger" icon={<Trash2 className="size-4" />} onClick={() => setConfirmDel(true)} aria-label="Eliminar" />}
           </>} />
       </div>
-      <BudgetDocument b={b} timezone={session.tenant!.timezone} />
+      <div data-tour="budget-document"><BudgetDocument b={b} timezone={session.tenant!.timezone} /></div>
+      <Tour steps={BUDGET_DETAIL_TOUR.filter((s) => writable || !['budget-status', 'budget-edit'].includes(s.target ?? ''))} open={detailTour.open} onClose={detailTour.close} />
       <Modal open={confirmDel} onClose={() => setConfirmDel(false)} title="Eliminar presupuesto" size="sm"
         footer={<><Button variant="secondary" onClick={() => setConfirmDel(false)}>Cancelar</Button><Button variant="danger" onClick={remove}>Eliminar</Button></>}>
         <p className="text-sm">¿Eliminar el presupuesto N° {b.budget_number}?</p>

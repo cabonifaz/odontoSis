@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import {
   CalendarDays, ClipboardList, Cloud, CloudOff, LayoutDashboard, LogOut, Menu, RefreshCw, Settings, ShieldCheck,
-  Stethoscope, Tags, UserCog, Handshake, LifeBuoy, FlaskConical, Users, X, Building2, CreditCard, Layers, AlertTriangle, IdCard,
+  Stethoscope, Tags, UserCog, Handshake, LifeBuoy, FlaskConical, Users, X, Building2, CreditCard, Layers, AlertTriangle, IdCard, CircleHelp,
   FileUp,
 } from 'lucide-react';
 import { cx } from '@/components/ui';
@@ -30,6 +30,7 @@ const CLINIC_NAV: NavItem[] = [
   { href: '/app/settings', label: 'Configuración', icon: <Settings className="size-5" />, perm: 'settings.manage' },
   { href: '/app/import', label: 'Carga masiva', icon: <FileUp className="size-5" />, perm: 'settings.manage', phase: 'IMPLEMENTATION' },
   { href: '/app/requests', label: 'Soporte y mejoras', icon: <LifeBuoy className="size-5" /> },
+  { href: '/app/help', label: 'Ayuda', icon: <CircleHelp className="size-5" /> },
 ];
 
 const ADMIN_NAV: NavItem[] = [

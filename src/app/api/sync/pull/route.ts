@@ -4,7 +4,7 @@ import { rateLimit } from '@/lib/server/rate-limit';
 
 /** Descarga incremental para trabajar sin conexión. Limitada por usuario: una descarga completa descifra toda la clínica. */
 export const GET = route({ platform: false }, async ({ req, user }) => {
-  rateLimit(`sync-pull:${user.userId}`, 30, 60_000);
+  rateLimit(`sync-pull:${user.userId}`, 120, 60_000); // la app sincroniza tras cada guardado, al reconectar y cada minuto
   const since = req.nextUrl.searchParams.get('since');
   const valid = since && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,3})?$/.test(since) ? since : null;
   return syncPull(tenantOf(user), valid, user.permissions);

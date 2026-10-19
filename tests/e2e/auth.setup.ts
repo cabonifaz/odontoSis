@@ -13,5 +13,7 @@ setup('login admin clínica demo', async ({ page }) => {
   await page.getByRole('button', { name: 'Ingresar' }).click();
   await page.waitForURL(/\/app/);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  // Las guías paso a paso no se abren solas en las pruebas (se prueban aparte en help-tour.spec.ts)
+  await page.evaluate(() => localStorage.setItem('odx:tours', 'off'));
   await page.context().storageState({ path: 'playwright/.auth/admin.json' });
 });

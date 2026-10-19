@@ -7,6 +7,8 @@ import { ClipboardList, CloudUpload, Plus, Search } from 'lucide-react';
 import { Badge, Button, Card, EmptyState, Input, PageHeader, Select, Spinner, Table, Td, Th } from '@/components/ui';
 import { useApp, useMasters, can } from '@/lib/client/app-context';
 import { formatDate, formatMoney } from '@/lib/shared/format';
+import { HelpButton, Tour, useTour } from '@/components/help/tour';
+import { BUDGET_LIST_TOUR } from '@/components/help/budget-tours';
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
@@ -15,6 +17,7 @@ export default function BudgetsPage() {
   const router = useRouter();
   const statuses = useMasters('BUDGET_STATUS');
   const [q, setQ] = useState('');
+  const tour = useTour('budget-list', session.userId);
   const [status, setStatus] = useState('');
   const budgets = useLiveQuery(async () => db?.budgets.orderBy('budget_date').reverse().toArray(), [db]);
   const patients = useLiveQuery(async () => db?.patients.toArray(), [db]);
@@ -34,8 +37,12 @@ export default function BudgetsPage() {
   return (
     <>
       <PageHeader title="Presupuestos" subtitle="Últimos 6 meses disponibles sin conexión"
-        actions={can(session, 'budgets.write') && <Link href="/app/budgets/new"><Button icon={<Plus className="size-4" />}>Nuevo presupuesto</Button></Link>} />
-      <Card>
+        actions={<>
+          <HelpButton onClick={tour.start} />
+          {can(session, 'budgets.write') && <Link href="/app/budgets/new" data-tour="new-budget"><Button icon={<Plus className="size-4" />}>Nuevo presupuesto</Button></Link>}
+        </>} />
+      <Tour steps={BUDGET_LIST_TOUR} open={tour.open} onClose={tour.close} />
+      <Card data-tour="budget-list">
         <div className="flex flex-col gap-3 border-b border-line p-4 sm:flex-row">
           <div className="relative flex-1 sm:max-w-md">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-subtle" />

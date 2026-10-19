@@ -8,6 +8,8 @@ const withSerwist = withSerwistInit({
   disable: process.env.NODE_ENV !== 'production',
   cacheOnNavigation: true,
   reloadOnOnline: false,
+  // Sólo íconos y manifiesto en el precache: las imágenes del manual (public/help) se bajan al abrir la ayuda
+  globPublicPatterns: ['icons/**/*', 'manifest.webmanifest'],
 });
 
 const nextConfig: NextConfig = {
