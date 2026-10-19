@@ -130,6 +130,9 @@ BEGIN
          p.coinsurance_pct, p.requires_guardian, p.guardian_name, gr.name AS guardian_relationship_name, p.guardian_phone_enc,
          p.agreement_id, p.agreement_member_code, p.mother_last_name, p.mobile_enc, p.home_branch_id, p.assigned_doctor_id,
          p.price_list_id, p.titular_patient_id,
+         -- Consentimientos vigentes (datos personales + confidencialidad): OK | PARTIAL | MISSING
+         (SELECT CASE COUNT(DISTINCT c.type_id) WHEN 0 THEN 'MISSING' WHEN (SELECT COUNT(*) FROM master_item ci JOIN master_table ct ON ct.id = ci.master_table_id WHERE ct.code = 'CONSENT_TYPE' AND ci.is_active = 1 AND ci.deleted_at IS NULL) THEN 'OK' ELSE 'PARTIAL' END
+            FROM patient_consent c WHERE c.patient_id = p.id AND c.status = 'ACTIVE' AND c.deleted_at IS NULL) AS consent_status,
          p.is_active, p.deleted_at, p.updated_at
     FROM patient p LEFT JOIN master_item gr ON gr.id = p.guardian_relationship_id
    WHERE p.tenant_id = p_tenant_id AND p.updated_at > v_since;

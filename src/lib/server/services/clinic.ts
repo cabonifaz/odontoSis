@@ -60,6 +60,7 @@ export async function getPatient(c: Ctx, id: string) {
     insuranceCompany: r.insurance_company, deductible: r.deductible, coinsurancePct: r.coinsurance_pct,
     allergies: decrypt(r.allergies_enc), medicalHistory: decrypt(r.medical_history_enc), notes: decrypt(r.notes_enc),
     isActive: !!r.is_active, createdAt: r.created_at, updatedAt: r.updated_at,
+    consentStatus: (r.consent_status as 'OK' | 'PARTIAL' | 'MISSING' | null) ?? 'MISSING',
     motherLastName: r.mother_last_name, mobile: decrypt(r.mobile_enc), messaging: decrypt(r.messaging_enc),
     maritalStatusId: r.marital_status_id, acquisitionSourceId: r.acquisition_source_id, cardNumber: r.card_number,
     districtId: r.district_id, districtName: r.district_name, provinceId: r.province_id, provinceName: r.province_name,

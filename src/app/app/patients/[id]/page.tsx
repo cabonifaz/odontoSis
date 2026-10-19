@@ -1,9 +1,9 @@
 'use client';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { CalendarPlus, ClipboardPlus, CloudOff, Lock, Pencil, Trash2 } from 'lucide-react';
+import { CalendarPlus, ClipboardPlus, CloudOff, Lock, Pencil, ShieldAlert, Trash2 } from 'lucide-react';
 import { Badge, Button, Card, EmptyState, Modal, PageHeader, Spinner, Tabs } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { useApp, useFormMode, useMasters, can } from '@/lib/client/app-context';
@@ -13,6 +13,7 @@ import { GuaranteeLettersTab } from '@/components/patients/guarantee-letters-tab
 import { OrthoBudgetsTab } from '@/components/patients/ortho-budgets-tab';
 import { DependentsTab } from '@/components/patients/dependents-tab';
 import { ClinicalNotesTab } from '@/components/patients/clinical-notes-tab';
+import { ConsentsTab } from '@/components/patients/consents-tab';
 import { api, ApiError } from '@/lib/client/api';
 import { PatientForm, type PatientFormValue } from '@/components/patients/patient-form';
 import { Odontogram, OdontogramLegend, toConditions, type Mark } from '@/components/odontogram/odontogram';
@@ -25,17 +26,21 @@ type Full = PatientFormValue & {
   districtName: string | null; provinceName: string | null; departmentName: string | null; homeBranchName: string | null;
   assignedDoctorName: string | null; attentionTypeName: string | null; priceListName: string | null; priceListGroup: string | null;
   titularName: string | null; titularRecordNumber: string | null; titularRelationshipName: string | null;
+  consentStatus: 'OK' | 'PARTIAL' | 'MISSING';
 };
-type Tab = 'datos' | 'historia' | 'dependientes' | 'derivaciones' | 'citas' | 'archivos' | 'odontograma' | 'presupuestos' | 'ortodoncia' | 'garantias';
+type Tab = 'datos' | 'historia' | 'dependientes' | 'derivaciones' | 'citas' | 'archivos' | 'odontograma' | 'presupuestos' | 'ortodoncia' | 'garantias' | 'consentimientos';
+const TABS: Tab[] = ['datos', 'historia', 'dependientes', 'derivaciones', 'citas', 'archivos', 'odontograma', 'presupuestos', 'ortodoncia', 'garantias', 'consentimientos'];
 
 export default function PatientDetail() {
   const { id } = useParams<{ id: string }>();
   const { db, session } = useApp();
   const router = useRouter();
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>('datos');
+  const qTab = useSearchParams().get('tab') as Tab | null;
+  const [tab, setTab] = useState<Tab>(qTab && TABS.includes(qTab) ? qTab : 'datos');
   const [full, setFull] = useState<Full | null>(null);
   const [offline, setOffline] = useState(false);
+  const [notFound, setNotFound] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const local = useLiveQuery(async () => db?.patients.get(id), [db, id]);
@@ -46,12 +51,13 @@ export default function PatientDetail() {
 
   const load = useCallback(() => {
     api<Full>(`/api/patients/${id}`).then((p) => { setFull(p); setOffline(false); })
-      .catch((e) => { if (e instanceof ApiError && e.isNetwork) setOffline(true); else if (e instanceof ApiError && e.status === 404) setFull(null); });
+      .catch((e) => { if (e instanceof ApiError && e.isNetwork) setOffline(true); else if (e instanceof ApiError && e.status === 404) { setFull(null); setNotFound(true); } });
   }, [id]);
   useEffect(load, [load]);
 
   const name = full ? [full.firstName, full.lastName, full.motherLastName].filter(Boolean).join(' ')
     : local ? [local.first_name, local.last_name, local.mother_last_name].filter(Boolean).join(' ') : '';
+  if (!full && !local && notFound) return <Card><EmptyState title="Paciente no encontrado" description="Puede haber sido eliminado o pertenecer a otra clínica." action={<Link href="/app/patients"><Button variant="secondary">Ir a pacientes</Button></Link>} /></Card>;
   if (!full && !local) return offline ? <Card><EmptyState icon={<CloudOff className="size-6" />} title="Paciente no disponible sin conexión" /></Card> : <Spinner />;
 
   async function remove() {
@@ -75,6 +81,11 @@ export default function PatientDetail() {
           {(full?.requiresGuardian ?? !!local?.requires_guardian) && <Badge color="var(--info)">Apoderado: {full?.guardianName ?? local?.guardian_name}</Badge>}
           <span>· {(full?.insuranceCompany ?? local?.insurance_company) || 'Particular'}</span>
           {local?.pending && <Badge color="var(--warning)">Pendiente de sincronizar</Badge>}
+          {(full ? full.consentStatus !== 'OK' : !!local && local.consent_status !== 'OK' && !local.pending) && (
+            <button type="button" onClick={() => setTab('consentimientos')} className="inline-flex items-center gap-1 rounded-full bg-warning px-2 py-0.5 text-xs font-bold text-white hover:opacity-90">
+              <ShieldAlert className="size-3.5" aria-hidden /> {(full?.consentStatus ?? local?.consent_status) === 'PARTIAL' ? 'Falta un consentimiento' : 'Faltan consentimientos'}
+            </button>
+          )}
         </span>}
         actions={<>
           {can(session, 'appointments.write') && <Link href={`/app/agenda?new=1&patientId=${id}`}><Button variant="secondary" icon={<CalendarPlus className="size-4" />}>Agendar cita</Button></Link>}
@@ -86,11 +97,11 @@ export default function PatientDetail() {
         { value: 'derivaciones', label: 'Derivaciones' }, { value: 'citas', label: 'Citas' },
         { value: 'archivos', label: 'Imágenes y archivos' }, { value: 'odontograma', label: 'Odontograma' },
         { value: 'presupuestos', label: 'Presupuestos operatorias' }, { value: 'ortodoncia', label: 'Presupuestos de ortodoncia' },
-        { value: 'garantias', label: 'Carta de garantía' },
+        { value: 'garantias', label: 'Carta de garantía' }, { value: 'consentimientos', label: 'Consentimientos' },
       ] : [
         { value: 'datos', label: 'Datos' }, { value: 'historia', label: 'Historia clínica' }, { value: 'odontograma', label: 'Odontograma' },
         { value: 'presupuestos', label: 'Presupuestos' }, { value: 'citas', label: 'Citas' },
-        { value: 'archivos', label: 'Imágenes y archivos' },
+        { value: 'archivos', label: 'Imágenes y archivos' }, { value: 'consentimientos', label: 'Consentimientos' },
       ]} />
 
       {tab === 'datos' && (
@@ -159,6 +170,13 @@ export default function PatientDetail() {
       {tab === 'derivaciones' && <ReferralsTab patientId={id} writable={writable} />}
       {tab === 'ortodoncia' && <OrthoBudgetsTab patientId={id} />}
       {tab === 'garantias' && <GuaranteeLettersTab patientId={id} writable={writable} />}
+      {tab === 'consentimientos' && (
+        <ConsentsTab patientId={id} onChanged={load} patient={full ? {
+          name: [full.firstName, full.lastName, full.motherLastName].filter(Boolean).join(' '), docNumber: full.docNumber ?? null, docTypeId: full.docTypeId ?? null,
+          birthDate: full.birthDate ?? null, requiresGuardian: !!full.requiresGuardian, guardianName: full.guardianName ?? null,
+          guardianDocNumber: full.guardianDocNumber ?? null, guardianDocTypeId: full.guardianDocTypeId ?? null, guardianRelationshipId: full.guardianRelationshipId ?? null,
+        } : null} />
+      )}
 
       <Modal open={confirmDel} onClose={() => setConfirmDel(false)} title="Eliminar paciente" size="sm"
         footer={<><Button variant="secondary" onClick={() => setConfirmDel(false)}>Cancelar</Button><Button variant="danger" onClick={remove}>Eliminar</Button></>}>

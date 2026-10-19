@@ -110,6 +110,12 @@ BEGIN
    WHERE fa.kind = 'REQUEST_ATTACHMENT' AND fa.deleted_at IS NULL
      AND fa.created_at < UTC_TIMESTAMP(3) - INTERVAL 24 HOUR
      AND NOT EXISTS (SELECT 1 FROM tenant_request_attachment a WHERE a.file_id = fa.id);
+  -- Formatos de consentimiento subidos que no llegaron a registrarse (> 24 h). Los vinculados nunca se borran.
+  UPDATE file_asset fa
+     SET fa.deleted_at = UTC_TIMESTAMP(3), fa.updated_by = NULL
+   WHERE fa.kind = 'CONSENT' AND fa.deleted_at IS NULL
+     AND fa.created_at < UTC_TIMESTAMP(3) - INTERVAL 24 HOUR
+     AND NOT EXISTS (SELECT 1 FROM patient_consent pc WHERE pc.file_id = fa.id);
 
   SELECT fa.id, fa.storage_key
     FROM file_asset fa

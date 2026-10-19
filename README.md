@@ -14,6 +14,7 @@ Sistema SaaS multi-clínica (multi-tenant) para la gestión de clínicas odontol
 | **Doctores / usuarios / roles** | Doctores (COP, especialidad, color de agenda), usuarios con roles (Administrador, Odontólogo, Recepción), límite de usuarios por plan. |
 | **Lista de precios** | Servicios por categoría, precio y laboratorio. |
 | **Carga masiva** | Sólo durante la implementación (administrador de la clínica o super admin): plantillas Excel/CSV con instrucciones y ejemplos para doctores, convenios, lista de precios y tarifarios, pacientes (con su H.C. anterior), historias clínicas, citas y presupuestos; validación previa con errores por fila e importación idempotente. Ver [docs/bulk-import.md](docs/bulk-import.md). |
+| **Consentimientos** | Formatos prellenados de tratamiento de datos personales (Ley N° 29733) y confidencialidad clínica (Ley N° 26842), firma del paciente o su apoderado, registro del documento firmado, historial y revocación; alertas de pacientes sin consentimientos. Ver [docs/consents.md](docs/consents.md). |
 | **Super admin (plataforma)** | Clínicas (tenants), planes y límites, pagos/suscripción, colores y logo de cada clínica, usuarios de cada clínica, catálogos (maestro de maestros). |
 
 El primer plan (**STARTER**) permite hasta **5 usuarios activos**. El límite se valida en la base de datos.

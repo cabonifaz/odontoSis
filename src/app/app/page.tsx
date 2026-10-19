@@ -9,6 +9,7 @@ import { formatMoney, formatTime } from '@/lib/shared/format';
 import { displayName, UserAvatar } from '@/components/avatar';
 import { ProfileQuickModal } from '@/components/profile-quick';
 import { BirthdaysCard } from '@/components/dashboard/birthdays-card';
+import { ConsentsAlert } from '@/components/dashboard/consents-alert';
 
 type Dash = {
   kpis: { patients_total: number; appointments_today: number; budgets_pending: number; approved_this_month: number };
@@ -61,6 +62,7 @@ export default function DashboardPage() {
         </Card>
       )}
       <ProfileQuickModal open={profileOpen} onClose={() => setProfileOpen(false)} session={session} />
+      <ConsentsAlert />
       {offline && !data ? (
         <Card><EmptyState title="Sin conexión" description="El resumen requiere internet. Puedes seguir usando Agenda, Pacientes y Presupuestos sin conexión." /></Card>
       ) : !data ? <Spinner /> : (

@@ -412,3 +412,26 @@ export const dniSettingsSchema = z.object({
   tenantCap: z.coerce.number().int().min(0).max(1_000_000).default(0),
   userCap: z.coerce.number().int().min(0).max(10_000).default(30),
 });
+
+/** Versión vigente del texto de los formatos de consentimiento (se guarda con cada firma) */
+export const CONSENT_FORM_VERSION = '2026.10';
+export const CONSENT_TYPES = ['DATA_PROTECTION', 'MEDICAL_CONFIDENTIALITY'] as const;
+
+/** Registro de un formato de consentimiento firmado (paciente o apoderado) */
+export const consentSchema = z.object({
+  types: z.array(z.enum(CONSENT_TYPES)).min(1, 'Elige al menos un consentimiento').max(CONSENT_TYPES.length),
+  signerType: z.enum(['PATIENT', 'GUARDIAN']),
+  signerName: text(200).min(3, 'Ingresa el nombre de quien firma'),
+  signerDocTypeId: optUuid,
+  signerDocNumber: optText(20),
+  signerRelationshipId: optUuid,
+  signedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida'),
+  marketingOptIn: z.coerce.boolean().default(false),
+  notes: optText(500),
+}).superRefine((c, ctx) => {
+  if (c.signerType === 'GUARDIAN' && !c.signerRelationshipId) ctx.addIssue({ code: 'custom', path: ['signerRelationshipId'], message: 'Indica el parentesco del apoderado' });
+});
+export const consentRevokeSchema = z.object({
+  revokedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida'),
+  reason: text(500).min(5, 'Indica el motivo de la revocación'),
+});

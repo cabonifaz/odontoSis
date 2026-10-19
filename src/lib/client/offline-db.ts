@@ -9,6 +9,8 @@ import type { SyncOp } from '@/lib/shared/schemas';
 export type LPatient = { id: string; record_number: string | null; first_name: string; last_name: string; birth_date: string | null; phone: string | null; insurance_company: string | null; deductible: number | null; coinsurance_pct: number | null; is_active: number; updated_at: string; pending?: boolean;
   requires_guardian?: number; guardian_name?: string | null; guardian_relationship_name?: string | null; guardian_phone?: string | null;
   agreement_id?: string | null; agreement_member_code?: string | null;
+  /** Consentimientos vigentes: OK | PARTIAL | MISSING (calculado en el servidor) */
+  consent_status?: 'OK' | 'PARTIAL' | 'MISSING' | null;
   mother_last_name?: string | null; home_branch_id?: string | null; assigned_doctor_id?: string | null; price_list_id?: string | null;
   titular_patient_id?: string | null };
 export type LPriceList = { id: string; code: string; name: string; group_name: string | null; branch_id: string | null; is_default: number; is_active: number; updated_at: string };

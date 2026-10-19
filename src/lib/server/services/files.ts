@@ -87,7 +87,7 @@ export async function readUpload(id: string, tenantId: string | null, isPlatform
   const f = await spOne<{ storage_key: string; mime_type: string; sha256: string; original_name: string; kind: string }>('sp_file_get', [tenantId, isPlatform ? 1 : 0, id]);
   if (!f) throw new AppError('NOT_FOUND');
   // Imágenes clínicas: sólo quien puede ver pacientes (mismo 404 para no confirmar que existe)
-  if (!isPlatform && f.kind === 'PATIENT_FILE' && !can(permissions, 'patients.read')) throw new AppError('NOT_FOUND');
+  if (!isPlatform && (f.kind === 'PATIENT_FILE' || f.kind === 'CONSENT') && !can(permissions, 'patients.read')) throw new AppError('NOT_FOUND');
   const full = resolve(root(), f.storage_key);
   if (!full.startsWith(root() + sep)) throw new AppError('NOT_FOUND'); // defensa ante path traversal
   return { data: await readStored(full), mime: f.mime_type, etag: f.sha256, name: f.original_name };

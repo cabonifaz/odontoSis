@@ -87,6 +87,8 @@ BEGIN
   SELECT p.id, p.record_number, p.doc_type_id, p.doc_number_enc, p.first_name, p.last_name, p.birth_date, p.sex_id,
          p.phone_enc, p.email_enc, p.address_enc, p.insurance_company, p.deductible, p.coinsurance_pct,
          p.allergies_enc, p.medical_history_enc, p.notes_enc, p.is_active, p.created_at, p.updated_at,
+         (SELECT CASE COUNT(DISTINCT c.type_id) WHEN 0 THEN 'MISSING' WHEN (SELECT COUNT(*) FROM master_item ci JOIN master_table ct ON ct.id = ci.master_table_id WHERE ct.code = 'CONSENT_TYPE' AND ci.is_active = 1 AND ci.deleted_at IS NULL) THEN 'OK' ELSE 'PARTIAL' END
+            FROM patient_consent c WHERE c.patient_id = p.id AND c.status = 'ACTIVE' AND c.deleted_at IS NULL) AS consent_status,
          p.requires_guardian, p.guardian_name, p.guardian_relationship_id, gr.name AS guardian_relationship_name,
          p.guardian_doc_type_id, gdt.code AS guardian_doc_type_code, p.guardian_doc_number_enc, p.guardian_phone_enc, p.guardian_email_enc,
          p.agreement_id, ag.name AS agreement_name, ag.discount_pct AS agreement_discount_pct, p.agreement_member_code,

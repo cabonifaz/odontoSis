@@ -30,7 +30,8 @@ const root = () => resolve(env().UPLOAD_DIR);
 export const detectPatientFileType = (buf: Buffer) => SIGNATURES.find((s) => s.test(buf)) ?? null;
 
 /** Valida, escribe en disco y registra el archivo (todavía sin vincularlo a la ficha del paciente). */
-export async function savePatientUpload(c: Ctx, patientId: string, file: File) {
+/** kind: PATIENT_FILE (imágenes clínicas) o CONSENT (formato de consentimiento firmado) */
+export async function savePatientUpload(c: Ctx, patientId: string, file: File, kind: 'PATIENT_FILE' | 'CONSENT' = 'PATIENT_FILE') {
   if (!UUID.test(c.tenantId) || !UUID.test(patientId)) throw new AppError('NOT_FOUND');
   if (file.size === 0 || file.size > PATIENT_FILE_MAX_BYTES) throw invalidFile();
   const buf = Buffer.from(await file.arrayBuffer());
@@ -41,7 +42,7 @@ export async function savePatientUpload(c: Ctx, patientId: string, file: File) {
   if (!(await spOne('sp_patient_get', [c.tenantId, patientId]))) throw new AppError('NOT_FOUND');
 
   const id = randomUUID();
-  const folder = `${c.tenantId}/patients/${patientId}`;
+  const folder = `${c.tenantId}/patients/${patientId}${kind === 'CONSENT' ? '/consents' : ''}`;
   const storageKey = `${folder}/${id}.${sig.ext}`;
   const full = resolve(root(), storageKey);
   if (!full.startsWith(root() + sep)) throw new AppError('NOT_FOUND'); // defensa ante path traversal
@@ -49,7 +50,7 @@ export async function savePatientUpload(c: Ctx, patientId: string, file: File) {
   await writeFile(full, buf, { mode: 0o640 });
   const name = file.name.replace(/[^\w.\- ]/g, '_').slice(0, 255) || `archivo.${sig.ext}`;
   try {
-    await callSp('sp_file_create', [c.tenantId, c.userId, c.ip, id, 'PATIENT_FILE', storageKey, name, sig.mime, buf.length, sha256(buf)]);
+    await callSp('sp_file_create', [c.tenantId, c.userId, c.ip, id, kind, storageKey, name, sig.mime, buf.length, sha256(buf)]);
   } catch (err) {
     await unlink(full).catch(() => {}); // p. ej. PLAN_STORAGE_LIMIT: no dejar el binario huérfano
     throw err;

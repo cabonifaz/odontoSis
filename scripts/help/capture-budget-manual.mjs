@@ -38,7 +38,7 @@ async function ensurePatient(first, last, mother, extra = {}) {
   const payload = { id: crypto.randomUUID(), firstName: first, lastName: last, motherLastName: mother, birthDate: '1988-04-12', isActive: true, ...extra };
   const r = await api('POST', '/api/sync/push', { ops: [{ opId: crypto.randomUUID(), type: 'patient.save', payload }] });
   const res = await r.json();
-  if (!r.ok() || res.results?.some((x) => x.status === 'error')) throw new Error(`No se creó ${first} ${last}: ${JSON.stringify(res)}`);
+  if (!r.ok() || res.results?.some((x) => !x.ok)) throw new Error(`No se creó ${first} ${last}: ${JSON.stringify(res)}`);
 }
 async function ensureDoctor() {
   const list = await (await api('GET', '/api/doctors')).json();

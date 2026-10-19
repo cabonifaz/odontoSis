@@ -66,5 +66,7 @@ database/procedures/0x0_*.sql                stored procedures (repetibles)
 | `dni_lookup` | Consumo de la consulta de DNI (sólo blind index del DNI, resultado y si consumió cupo) |
 | `import_batch` | Historial de la carga masiva (sólo en implementación): entidad (catálogo `IMPORT_ENTITY`), estado (`IMPORT_STATUS`), archivo y su SHA-256, filas totales / OK / con error, registros nuevos / actualizados, duración y las primeras 300 filas con error (sin datos sensibles) |
 | `patient_clinical_note` | Historia clínica: notas de evolución por fecha y doctor. Texto cifrado (`note_enc`) + HMAC (`note_bidx`) para no duplicar al re-importar; `external_code` del sistema anterior. Se muestra sólo lectura en la ficha (pestaña Historia clínica) |
+| `patient_consent` | Consentimientos firmados del paciente (datos personales y confidencialidad), con historial y revocación |
+| `notification` | Notificaciones por usuario (campana y contadores del menú) |
 | `audit_log` | Bitácora |
 | `schema_migration` | Control de migraciones |
