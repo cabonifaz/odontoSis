@@ -128,6 +128,10 @@ BEGIN
       FROM JSON_TABLE(p_file_ids, '$[*]' COLUMNS (ord FOR ORDINALITY, fid CHAR(36) PATH '$')) j;
   END IF;
   CALL sp_audit_log_add(p_tenant_id, p_actor_id, 'tenant_request', p_id, 'CREATE', JSON_OBJECT('type', p_type_code, 'title', p_title, 'attachments', v_n), p_ip);
+  -- Aviso a la plataforma
+  CALL sp__notify_platform('requests', 'REQUEST_CREATED',
+       CONCAT('Nueva solicitud de ', (SELECT trade_name FROM tenant WHERE id = p_tenant_id)),
+       p_title, CONCAT('/admin/requests?open=', p_id), p_id, p_actor_id);
 END $$
 
 -- Atención de la solicitud por la plataforma
@@ -135,12 +139,25 @@ DROP PROCEDURE IF EXISTS sp_tenant_request_update $$
 CREATE PROCEDURE sp_tenant_request_update(
   IN p_actor_id CHAR(36), IN p_ip VARCHAR(64), IN p_id CHAR(36), IN p_status_code VARCHAR(60), IN p_response TEXT)
 BEGIN
-  DECLARE v_status CHAR(36); DECLARE v_tenant CHAR(36);
+  DECLARE v_status, v_old_status, v_tenant, v_creator CHAR(36);
+  DECLARE v_old_response TEXT; DECLARE v_title VARCHAR(200);
   CALL sp__master_id('REQUEST_STATUS', p_status_code, NULL, v_status);
-  SELECT tenant_id INTO v_tenant FROM tenant_request WHERE id = p_id AND deleted_at IS NULL;
+  SELECT tenant_id, status_id, response, created_by, title INTO v_tenant, v_old_status, v_old_response, v_creator, v_title
+    FROM tenant_request WHERE id = p_id AND deleted_at IS NULL;
   IF v_tenant IS NULL THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'APP:NOT_FOUND'; END IF;
   UPDATE tenant_request SET status_id = v_status, response = p_response, updated_by = p_actor_id WHERE id = p_id;
   CALL sp_audit_log_add(v_tenant, p_actor_id, 'tenant_request', p_id, 'UPDATE', JSON_OBJECT('status', p_status_code), p_ip);
+  -- Aviso a quien la creó (si cambió el estado o la respuesta)
+  IF NOT (v_old_status <=> v_status) OR NOT (COALESCE(v_old_response, '') <=> COALESCE(p_response, '')) THEN
+    CALL sp__notify(v_tenant, v_creator, 'requests', 'REQUEST_UPDATED',
+         CASE WHEN v_old_status <=> v_status THEN 'Nueva respuesta a tu solicitud'
+              WHEN p_status_code = 'DONE' THEN 'Tu solicitud fue atendida'
+              WHEN p_status_code = 'IN_PROGRESS' THEN 'Tu solicitud está en proceso'
+              WHEN p_status_code = 'REJECTED' THEN 'Tu solicitud fue descartada'
+              ELSE 'Tu solicitud fue reabierta' END,
+         CONCAT('«', v_title, '»', IF(COALESCE(p_response, '') = '', '', CONCAT(': ', LEFT(p_response, 300)))),
+         CONCAT('/app/requests?highlight=', p_id), p_id, p_actor_id);
+  END IF;
 END $$
 
 -- ---------------- Ampliación del periodo de implementación ----------------

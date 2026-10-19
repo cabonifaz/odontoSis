@@ -10,26 +10,30 @@ import {
 import { cx } from '@/components/ui';
 import { UserAvatar, displayName } from '@/components/avatar';
 import { ProfileQuickModal } from '@/components/profile-quick';
+import { NotificationBell, badgeText } from '@/components/shell/notification-bell';
+import { useNotifications, useTodayCounts } from '@/lib/client/notifications';
 import { useApp, can } from '@/lib/client/app-context';
 import { api } from '@/lib/client/api';
 import { wipeLocalData } from '@/lib/client/offline-db';
 import { formatDate, formatDateTime } from '@/lib/shared/format';
 import type { ClientSession } from '@/lib/shared/types';
 
-type NavItem = { href: string; label: string; icon: ReactNode; perm?: string; /** sólo visible en esa fase de la clínica */ phase?: 'IMPLEMENTATION' };
+type NavItem = { href: string; label: string; icon: ReactNode; perm?: string; /** sólo visible en esa fase de la clínica */ phase?: 'IMPLEMENTATION';
+  /** contador junto al ítem: citas de hoy, presupuestos que vencen hoy, respuestas sin leer */
+  badge?: 'agenda' | 'budgets' | 'requests' };
 
 const CLINIC_NAV: NavItem[] = [
   { href: '/app', label: 'Inicio', icon: <LayoutDashboard className="size-5" /> },
-  { href: '/app/agenda', label: 'Agenda', icon: <CalendarDays className="size-5" />, perm: 'appointments.read' },
+  { href: '/app/agenda', label: 'Agenda', icon: <CalendarDays className="size-5" />, perm: 'appointments.read', badge: 'agenda' },
   { href: '/app/patients', label: 'Pacientes', icon: <Users className="size-5" />, perm: 'patients.read' },
-  { href: '/app/budgets', label: 'Presupuestos', icon: <ClipboardList className="size-5" />, perm: 'budgets.read' },
+  { href: '/app/budgets', label: 'Presupuestos', icon: <ClipboardList className="size-5" />, perm: 'budgets.read', badge: 'budgets' },
   { href: '/app/services', label: 'Lista de precios', icon: <Tags className="size-5" />, perm: 'services.read' },
   { href: '/app/agreements', label: 'Convenios', icon: <Handshake className="size-5" />, perm: 'settings.manage' },
   { href: '/app/doctors', label: 'Doctores', icon: <Stethoscope className="size-5" />, perm: 'doctors.read' },
   { href: '/app/users', label: 'Usuarios', icon: <UserCog className="size-5" />, perm: 'users.manage' },
   { href: '/app/settings', label: 'Configuración', icon: <Settings className="size-5" />, perm: 'settings.manage' },
   { href: '/app/import', label: 'Carga masiva', icon: <FileUp className="size-5" />, perm: 'settings.manage', phase: 'IMPLEMENTATION' },
-  { href: '/app/requests', label: 'Soporte y mejoras', icon: <LifeBuoy className="size-5" /> },
+  { href: '/app/requests', label: 'Soporte y mejoras', icon: <LifeBuoy className="size-5" />, badge: 'requests' },
   { href: '/app/help', label: 'Ayuda', icon: <CircleHelp className="size-5" /> },
 ];
 
@@ -38,7 +42,7 @@ const ADMIN_NAV: NavItem[] = [
   { href: '/admin/tenants', label: 'Clínicas', icon: <Building2 className="size-5" /> },
   { href: '/admin/plans', label: 'Planes', icon: <Layers className="size-5" /> },
   { href: '/admin/payments', label: 'Pagos', icon: <CreditCard className="size-5" /> },
-  { href: '/admin/requests', label: 'Solicitudes', icon: <LifeBuoy className="size-5" /> },
+  { href: '/admin/requests', label: 'Solicitudes', icon: <LifeBuoy className="size-5" />, badge: 'requests' },
   { href: '/admin/catalogs', label: 'Catálogos', icon: <Tags className="size-5" /> },
   { href: '/admin/dni', label: 'Consultas DNI', icon: <IdCard className="size-5" /> },
 ];
@@ -55,6 +59,15 @@ export function AppShell({ session, children }: { session: ClientSession; childr
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const { byArea } = useNotifications();
+  const today = useTodayCounts();
+  /** Contador de cada ítem del menú: valor, color y texto para lectores de pantalla */
+  const badgeOf = (k?: NavItem['badge']) => {
+    if (k === 'agenda') return { n: today.appointmentsToday, tone: 'bg-brand text-[color:var(--brand-contrast,#fff)]', label: `${today.appointmentsToday} citas por atender hoy` };
+    if (k === 'budgets') return { n: today.budgetsDueToday, tone: 'bg-warning text-white', label: `${today.budgetsDueToday} presupuestos vencen hoy` };
+    if (k === 'requests') return { n: byArea.requests ?? 0, tone: 'bg-danger text-white', label: `${byArea.requests ?? 0} sin leer` };
+    return null;
+  };
   const nav = (session.isPlatform ? ADMIN_NAV : CLINIC_NAV).filter((n) => (!n.perm || can(session, n.perm)) && (!n.phase || session.tenant?.access.phase === n.phase));
   const isActive = (href: string) => (href === '/app' || href === '/admin' ? pathname === href : pathname.startsWith(href));
   const brandName = session.tenant?.name ?? 'OdontoSis';
@@ -77,7 +90,15 @@ export function AppShell({ session, children }: { session: ClientSession; childr
             aria-current={isActive(n.href) ? 'page' : undefined}
             className={cx('flex items-center gap-3 rounded-control px-3 py-2 text-sm font-medium transition-colors',
               isActive(n.href) ? 'bg-brand-soft text-brand' : 'text-muted hover:bg-surface-2 hover:text-fg')}>
-            {n.icon}{n.label}
+            {n.icon}<span className="flex-1">{n.label}</span>
+            {(() => {
+              const b = badgeOf(n.badge);
+              return b && b.n > 0 ? (
+                <span className={cx('grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[11px] font-bold leading-none', b.tone)} title={b.label} aria-label={b.label}>
+                  {badgeText(b.n)}
+                </span>
+              ) : null;
+            })()}
           </Link>
         ))}
       </nav>
@@ -117,9 +138,13 @@ export function AppShell({ session, children }: { session: ClientSession; childr
       )}
 
       <header className="no-print sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-surface/90 px-4 backdrop-blur lg:px-8">
-        <button onClick={() => setOpen(true)} className="rounded-md p-2 text-muted hover:bg-surface-2 lg:hidden" aria-label="Abrir menú"><Menu className="size-5" /></button>
+        <button onClick={() => setOpen(true)} className="relative rounded-md p-2 text-muted hover:bg-surface-2 lg:hidden" aria-label={nav.some((n) => (badgeOf(n.badge)?.n ?? 0) > 0) ? 'Abrir menú (hay pendientes)' : 'Abrir menú'}>
+          <Menu className="size-5" />
+          {nav.some((n) => (badgeOf(n.badge)?.n ?? 0) > 0) && <span aria-hidden className="absolute right-1.5 top-1.5 size-2 rounded-full bg-danger ring-2 ring-surface" />}
+        </button>
         <div className="flex-1" />
         {!session.isPlatform && <SyncIndicator />}
+        <NotificationBell timezone={session.tenant?.timezone} />
       </header>
 
       <AccessBanner session={session} />

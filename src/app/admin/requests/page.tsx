@@ -7,6 +7,8 @@ import { useToast } from '@/components/ui/toast';
 import { api, ApiError, fieldErrors } from '@/lib/client/api';
 import { formatDateTime } from '@/lib/shared/format';
 import { AttachmentThumbs, type Attachment } from '@/components/image-attachments';
+import { useSeenArea } from '@/lib/client/notifications';
+import { useSearchParams } from 'next/navigation';
 
 type RequestRow = {
   id: string; tenant_id: string; tenant_name: string; type_code: string; type_name: string; type_color: string | null;
@@ -35,6 +37,10 @@ export default function RequestsPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const reqSeq = useRef(0);
+  const fresh = useSeenArea('requests');
+  const params = useSearchParams();
+  const openId = params.get('open');
+  const autoOpened = useRef<string | null>(null);
 
   useEffect(() => {
     api<TenantOpt[]>('/api/admin/tenants').then(setTenants)
@@ -60,6 +66,14 @@ export default function RequestsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, tenantId]);
   useEffect(() => { setRows(null); load(); }, [load]);
+  // Desde una notificación (?open=<id>): abre esa solicitud; si el filtro la oculta, muestra todas
+  useEffect(() => {
+    if (!openId || !rows || autoOpened.current === openId) return;
+    const r = rows.find((x) => x.id === openId);
+    if (r) { autoOpened.current = openId; open(r); }
+    else if (status !== '') setStatus('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, rows]);
 
   const open = (r: RequestRow) => {
     setErrors({});
@@ -107,6 +121,7 @@ export default function RequestsPage() {
               {rows.map((r) => (
                 <tr key={r.id}>
                   <Td>
+                    {(fresh.has(r.id) || openId === r.id) && <span className="mr-2 rounded-full bg-danger px-2 py-0.5 align-middle text-[11px] font-bold uppercase tracking-wide text-white">Nueva</span>}
                     <button type="button" onClick={() => open(r)} className="text-left font-medium hover:text-brand">{r.title}</button>
                     <p className="line-clamp-1 max-w-md text-xs text-muted">{r.description}</p>
                     {!!r.attachments?.length && <p className="mt-0.5 flex items-center gap-1 text-xs text-brand"><Paperclip className="size-3" aria-hidden />{r.attachments.length} captura{r.attachments.length > 1 ? 's' : ''}</p>}

@@ -24,6 +24,13 @@ function pool(): Pool {
       database: e.DB_NAME,
       connectionLimit: e.DB_POOL_SIZE,
       waitForConnections: true,
+      // El servidor/proxy de BD cierra conexiones inactivas: se mantienen vivas y se descartan las ociosas
+      // antes de que el otro lado las corte (evita ECONNRESET al reutilizar una conexión muerta)
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10_000,
+      maxIdle: Math.max(1, Math.ceil(e.DB_POOL_SIZE / 2)),
+      idleTimeout: 60_000,
+      connectTimeout: 10_000,
       timezone: 'Z',
       dateStrings: true,
       decimalNumbers: true,

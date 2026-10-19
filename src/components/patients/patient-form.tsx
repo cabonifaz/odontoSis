@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Baby, Handshake, ShieldAlert, UserRound } from 'lucide-react';
 import { Button, Checkbox, cx, Input, Select, Textarea } from '@/components/ui';
@@ -77,11 +77,24 @@ export function PatientForm({ initial, onSaved, onCancel }: { initial: PatientFo
   const plansInGroup = priceLists.filter((l) => (l.group_name || 'Tarifario general') === currentGroup && (!l.branch_id || !v.homeBranchId || l.branch_id === v.homeBranchId));
 
   /** Botón rápido: marca como menor y lleva el foco al apoderado */
+  const wantMother = useRef(false);
   function quickMinor() {
     setRequiresGuardian(true);
-    if (!v.guardianRelationshipId) setV((p) => ({ ...p, guardianRelationshipId: relationships.find((r) => r.code === 'MOTHER')?.id ?? '' }));
+    if (!v.guardianRelationshipId) {
+      const mother = relationships.find((r) => r.code === 'MOTHER')?.id;
+      if (mother) setV((p) => ({ ...p, guardianRelationshipId: mother }));
+      else wantMother.current = true; // catálogos aún sincronizando (primer ingreso): se completa al llegar
+    }
     setTimeout(() => document.getElementById('guardian-name')?.focus(), 50);
   }
+
+  useEffect(() => {
+    if (!wantMother.current) return;
+    const mother = relationships.find((r) => r.code === 'MOTHER')?.id;
+    if (!mother) return;
+    wantMother.current = false;
+    setV((p) => (p.guardianRelationshipId ? p : { ...p, guardianRelationshipId: mother }));
+  }, [relationships]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
