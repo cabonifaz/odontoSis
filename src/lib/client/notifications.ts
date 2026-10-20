@@ -9,7 +9,7 @@ export type NotificationItem = {
   id: string; area: string; kind: string; title: string; body: string | null; link: string | null;
   entity_id: string | null; read_at: string | null; created_at: string;
 };
-type State = { unread: number; byArea: Record<string, number>; items: NotificationItem[]; loaded: boolean };
+type State = { unread: number; byArea: Record<string, number>; pending?: Record<string, number>; items: NotificationItem[]; loaded: boolean };
 
 /**
  * Notificaciones del usuario: un único sondeo compartido (cada minuto, al volver a la pestaña y al

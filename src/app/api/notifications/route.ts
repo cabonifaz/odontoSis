@@ -6,5 +6,5 @@ import { notificationsFor } from '@/lib/server/services/notifications';
 export const GET = route({ allowPending: true }, async ({ req, user }) => {
   rateLimit(`notifications:${user.userId}`, 120, 60_000);
   const area = req.nextUrl.searchParams.get('area');
-  return notificationsFor(user.userId, area && /^[a-z]{1,30}$/.test(area) ? area : null);
+  return notificationsFor(user.userId, area && /^[a-z]{1,30}$/.test(area) ? area : null, 20, user.isPlatform);
 });

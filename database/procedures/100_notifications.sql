@@ -27,6 +27,29 @@ BEGIN
    WHERE u.tenant_id IS NULL AND r.code = 'SUPER_ADMIN' AND u.is_active = 1 AND u.deleted_at IS NULL;
 END $$
 
+-- Notifica a quien creó el registro y a los administradores activos de la clínica (sin duplicar ni avisar al actor)
+DROP PROCEDURE IF EXISTS sp__notify_clinic $$
+CREATE PROCEDURE sp__notify_clinic(
+  IN p_tenant_id CHAR(36), IN p_creator_id CHAR(36), IN p_area VARCHAR(30), IN p_kind VARCHAR(40),
+  IN p_title VARCHAR(200), IN p_body VARCHAR(500), IN p_link VARCHAR(300), IN p_entity_id CHAR(36), IN p_actor_id CHAR(36))
+BEGIN
+  INSERT INTO notification (id, tenant_id, user_id, area, kind, title, body, link, entity_id, created_by, updated_by)
+  SELECT UUID(), p_tenant_id, u.id, p_area, p_kind, LEFT(p_title, 200), LEFT(p_body, 500), p_link, p_entity_id, p_actor_id, p_actor_id
+    FROM app_user u JOIN role r ON r.id = u.role_id
+   WHERE u.tenant_id = p_tenant_id AND u.is_active = 1 AND u.deleted_at IS NULL
+     AND (u.id = p_creator_id OR r.code = 'CLINIC_ADMIN')
+     AND (p_actor_id IS NULL OR u.id <> p_actor_id);
+END $$
+
+-- Solicitudes pendientes de atención (abiertas o en proceso): de una clínica o de todas (p_tenant_id NULL)
+DROP PROCEDURE IF EXISTS sp_request_pending_count $$
+CREATE PROCEDURE sp_request_pending_count(IN p_tenant_id CHAR(36))
+BEGIN
+  SELECT COUNT(*) AS pending
+    FROM tenant_request r JOIN master_item s ON s.id = r.status_id
+   WHERE r.deleted_at IS NULL AND s.code IN ('OPEN', 'IN_PROGRESS') AND (p_tenant_id IS NULL OR r.tenant_id = p_tenant_id);
+END $$
+
 -- Contadores sin leer: total y por área (para la campana y los menús)
 DROP PROCEDURE IF EXISTS sp_notification_summary $$
 CREATE PROCEDURE sp_notification_summary(IN p_user_id CHAR(36))

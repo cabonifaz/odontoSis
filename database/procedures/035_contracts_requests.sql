@@ -149,7 +149,7 @@ BEGIN
   CALL sp_audit_log_add(v_tenant, p_actor_id, 'tenant_request', p_id, 'UPDATE', JSON_OBJECT('status', p_status_code), p_ip);
   -- Aviso a quien la creó (si cambió el estado o la respuesta)
   IF NOT (v_old_status <=> v_status) OR NOT (COALESCE(v_old_response, '') <=> COALESCE(p_response, '')) THEN
-    CALL sp__notify(v_tenant, v_creator, 'requests', 'REQUEST_UPDATED',
+    CALL sp__notify_clinic(v_tenant, v_creator, 'requests', 'REQUEST_UPDATED',
          CASE WHEN v_old_status <=> v_status THEN 'Nueva respuesta a tu solicitud'
               WHEN p_status_code = 'DONE' THEN 'Tu solicitud fue atendida'
               WHEN p_status_code = 'IN_PROGRESS' THEN 'Tu solicitud está en proceso'

@@ -59,13 +59,18 @@ export function AppShell({ session, children }: { session: ClientSession; childr
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const { byArea } = useNotifications();
+  const { byArea, pending } = useNotifications();
   const today = useTodayCounts();
   /** Contador de cada ítem del menú: valor, color y texto para lectores de pantalla */
   const badgeOf = (k?: NavItem['badge']) => {
     if (k === 'agenda') return { n: today.appointmentsToday, tone: 'bg-brand text-[color:var(--brand-contrast,#fff)]', label: `${today.appointmentsToday} citas por atender hoy` };
     if (k === 'budgets') return { n: today.budgetsDueToday, tone: 'bg-warning text-white', label: `${today.budgetsDueToday} presupuestos vencen hoy` };
-    if (k === 'requests') return { n: byArea.requests ?? 0, tone: 'bg-danger text-white', label: `${byArea.requests ?? 0} sin leer` };
+    if (k === 'requests') {
+      const unread = byArea.requests ?? 0;
+      if (unread > 0 || !session.isPlatform) return { n: unread, tone: 'bg-danger text-white', label: session.isPlatform ? `${unread} solicitudes nuevas sin revisar` : `${unread} respuestas sin leer` };
+      const p = pending?.requests ?? 0;
+      return { n: p, tone: 'bg-surface-2 text-fg ring-1 ring-line-strong', label: `${p} solicitudes pendientes de atención` };
+    }
     return null;
   };
   const nav = (session.isPlatform ? ADMIN_NAV : CLINIC_NAV).filter((n) => (!n.perm || can(session, n.perm)) && (!n.phase || session.tenant?.access.phase === n.phase));

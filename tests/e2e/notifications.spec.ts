@@ -16,6 +16,10 @@ test.describe('notificaciones y pendientes del día', () => {
     // El super admin recibió aviso de la solicitud nueva y la atiende
     const out = JSON.parse(execSync(`node --conditions=react-server --import tsx scripts/e2e-attend-request.mts ${id} DONE`, { stdio: 'pipe' }).toString().trim().split('\n').pop()!);
     expect(out.superAdminNotified).toBe(true);
+    // Avisa a todos los administradores de la clínica, no sólo a quien la creó
+    expect(out.admins).toBeGreaterThan(0);
+    expect(out.adminsNotified).toBe(out.admins);
+    expect(typeof out.pendingForPlatform.requests).toBe('number');
 
     await page.reload();
     await page.waitForLoadState('networkidle');
